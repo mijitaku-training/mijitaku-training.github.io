@@ -16,7 +16,7 @@ window.MIJITAKU_SITE_DATA = {
       "short": "8月号",
       "folder": "2026-08",
       "pages": 53,
-      "latest" true
+      "latest": true
     },
     {
       "id": "2026-07",
