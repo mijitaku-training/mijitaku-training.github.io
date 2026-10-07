@@ -1,8 +1,8 @@
 import {DEFAULT_PAGE_SETTINGS,normalizePageSettings,pageGeometry,applyPageSettings} from './page-settings.js?v=21';
 import {saveDraft,readDraft,makeProject,validateProject,bytesToBase64,base64ToBytes} from './storage.js?v=21';
-import {createWebZip} from './web-export.js?v=21';
-import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits} from './layout.js?v=21';
-import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=21';
+import {createWebZip} from './web-export.js?v=22';
+import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=22';
+import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=22';
 import {readPdfFile,restorePdfSizes} from './pdf-import.js?v=21';
 const $=id=>document.getElementById(id);
 let font,fontBytes,proof,currentPage=0,busy=false,objectUrl,revision=0,pdfFile,sharing=false,pdfOutput=null;
@@ -289,7 +289,7 @@ function addCombineTools(input,label){
   input.parentElement.append(bar);
 }
 function rubyAt(input,start=input.selectionStart,end=input.selectionEnd){
-  return Array.from(input.value.matchAll(/｜([^｜《》\n]+)《([^《》\n]*)》/g)).find(m=>start===end?start>=m.index&&start<m.index+m[0].length:start<m.index+m[0].length&&end>m.index);
+  return rubyMatches(input.value).find(m=>start===end?start>=m.index&&start<m.index+m[0].length:start<m.index+m[0].length&&end>m.index);
 }
 function rubyText(input){
   if(busy)return;
@@ -300,7 +300,7 @@ function rubyText(input){
   for(const m of input.value.matchAll(/\[\[([^\n]*?)\]\]/g))if(start<m.index+m[0].length&&end>m.index){message('組文字を解除してからルビを付けてください。',true);return;}
   const reading=window.prompt('「'+base+'」の読み仮名を入力してください。',existing?.[2]||'');if(reading===null)return;
   if(!reading.trim()||/[\s\[\]《》｜]/u.test(reading.trim())){message('読み仮名には空白・改行・ルビの記号を含めないでください。',true);return;}
-  const marked='｜'+base+'《'+reading.trim()+'》';
+  const marked=existing?.[0].startsWith('《')?'《'+base+'《'+reading.trim()+'》》':'｜'+base+'《'+reading.trim()+'》';
   try{textUnits(marked);}catch(error){message(error.message,true);return;}
   if(existing){start=existing.index;end=start+existing[0].length;}
   replaceTextRange(input,start,end,marked,start+1,start+1+base.length);message('ルビを付けました。プレビューで確認してください。');

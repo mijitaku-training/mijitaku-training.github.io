@@ -7,19 +7,22 @@ const graphemeSplitter = typeof Intl.Segmenter==='function' ? new Intl.Segmenter
 export function graphemes(text){return graphemeSplitter?Array.from(graphemeSplitter.segment(text),x=>x.segment):Array.from(text);}
 export function normalizeBody(text){return text.replace(/\r\n?|[\u2028\u2029\u0085]/g,'\n').replace(/\u00a0/g,' ').replace(/\t/g,'　').normalize('NFC');}
 const narrow=s=>s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xfee0));
+export function rubyMatches(text){return Array.from(text.matchAll(/｜([^｜《》\n]+)《([^《》\n]*)》|《([^｜《》\n]+)《([^《》\n]*)》》/g),m=>Object.assign([m[0],m[1]??m[3],m[2]??m[4]],{index:m.index}));}
 export function textUnits(text,{combineDigits=true,markup=true}={}){
   const chars=graphemes(text),units=[];
   for(let i=0;i<chars.length;){
-    if(markup&&chars[i]==='｜'){
+    if(markup&&(chars[i]==='｜'||chars[i]==='《')){
+      const wrapped=chars[i]==='《';
       const open=chars.indexOf('《',i+1),close=chars.indexOf('》',i+1);
-      if(open>i&&close>open&&!chars.slice(i+1,open).some(c=>/[\n｜]/u.test(c))){
+      if(open>i&&close>open&&!chars.slice(i+1,open).some(c=>/[\n｜《》]/u.test(c))){
+        if(wrapped&&chars[close+1]!=='》')throw new Error('ルビの指定が閉じていません。《きみ《あなた》》の形にしてください。');
         const base=chars.slice(i+1,open).join(''),reading=chars.slice(open+1,close).join('');
         if(!base||graphemes(base).length>20||/[\s\[\]《》｜]/u.test(base))throw new Error('ルビの親文字は、空白・記号を含まない1〜20文字にしてください。');
         const parent=textUnits(base,{combineDigits,markup:false}),rubyChars=graphemes(reading);
         if(!reading||rubyChars.length>60||rubyChars.length>parent.length*4||/[\s\[\]《》｜]/u.test(reading))throw new Error('読み仮名は親文字1枠につき4文字以内、全体で60文字以内にしてください。空白やルビの記号は使えません。');
-        const ruby={reading,total:parent.length};parent.forEach((u,n)=>units.push({...u,ruby,rubyIndex:n}));i=close+1;continue;
+        const ruby={reading,total:parent.length};parent.forEach((u,n)=>units.push({...u,ruby,rubyIndex:n}));i=close+(wrapped?2:1);continue;
       }
-      if(open>i&&!chars.slice(i+1,open).some(c=>/[\n｜]/u.test(c)))throw new Error('ルビの指定が閉じていません。｜漢字《かんじ》の形にしてください。');
+      if(open>i&&!chars.slice(i+1,open).some(c=>/[\n｜《》]/u.test(c)))throw new Error('ルビの指定が閉じていません。《きみ《あなた》》または｜きみ《あなた》の形にしてください。');
     }
     if(markup&&chars[i]==='['&&chars[i+1]==='['){
       let end=i+2;while(end<chars.length&&!(chars[end]===']'&&chars[end+1]===']'))end++;
@@ -117,7 +120,7 @@ function paginateAfterwordLegacy({title='あとがき',author='',body='',indent=
   }
   return {title,author,body:normalizeBody(body),indent,startSide,combineDigits,pages:withRuby(pages)};
 }
-export function plainText(text){return normalizeBody(text).replace(/｜([^｜《》\n]+)《[^《》\n]*》/g,'$1').replace(/\[\[([^\n]*?)\]\]/g,'$1');}
+export function plainText(text){let result=normalizeBody(text);for(const m of rubyMatches(result).reverse())result=result.slice(0,m.index)+m[1]+result.slice(m.index+m[0].length);return result.replace(/\[\[([^\n]*?)\]\]/g,'$1');}
 export function prefaceLength(text){return graphemes(plainText(text).replace(/\n/g,'')).length;}
 // Ruby uses ordinary positioned cells, so preview, PDF and WebP share one layout.
 function withRuby(pages){
