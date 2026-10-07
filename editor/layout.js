@@ -162,7 +162,8 @@ function paginateReaderLegacy({title='',author='',body='',preface='',indent=true
       textUnits('まえがき',{markup:false}).forEach((u,n)=>add(cells,u,533+n*30,343,16,'preface-heading'));
       intro.forEach((line,col)=>line.forEach((u,row)=>add(cells,u,636-col*25,382+row*17,16,'preface')));
       page.images=[{data:readerLogo,x:510,y:128,width:176,height:176}];
-      page.rules=[{x:518,y:368,width:136,height:1.5,color:'#487e42'}];
+      // Match the visible logo edges (excluding transparent PNG padding).
+      page.rules=[{x:510+176*134/1254,y:368,width:176*(1121-134)/1254,height:1.5,color:'#253c59'}];
     }
     pages.push(page);
   }
