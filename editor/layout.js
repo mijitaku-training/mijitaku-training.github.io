@@ -159,11 +159,14 @@ function paginateReaderLegacy({title='',author='',body='',preface='',indent=true
     if(first){
       textUnits(title,{combineDigits}).forEach((u,n)=>add(cells,u,422,184+n*26,26,'title'));
       const name=textUnits(author,{combineDigits});name.forEach((u,n)=>add(cells,u,name.some(c=>c.ruby)?388:400,873.635-name.length*22+n*22,22,'author'));
-      textUnits('まえがき',{markup:false}).forEach((u,n)=>add(cells,u,533+n*30,343,16,'preface-heading'));
+      const ruleX=510+176*134/1254,ruleWidth=176*(1121-134)/1254;
+      const heading=textUnits('まえがき',{markup:false}),headingSize=16,headingPitch=30;
+      const headingX=ruleX+(ruleWidth-((heading.length-1)*headingPitch+headingSize))/2;
+      heading.forEach((u,n)=>add(cells,u,headingX+n*headingPitch,343,headingSize,'preface-heading'));
       intro.forEach((line,col)=>line.forEach((u,row)=>add(cells,u,636-col*25,382+row*17,16,'preface')));
       page.images=[{data:readerLogo,x:510,y:128,width:176,height:176}];
       // Match the visible logo edges (excluding transparent PNG padding).
-      page.rules=[{x:510+176*134/1254,y:368,width:176*(1121-134)/1254,height:1.5,color:'#253c59'}];
+      page.rules=[{x:ruleX,y:368,width:ruleWidth,height:1.5,color:'#253c59'}];
     }
     pages.push(page);
   }
