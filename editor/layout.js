@@ -1,5 +1,5 @@
 import {pageGeometry,fitTemplate} from './page-settings.js?v=21';
-import {readerLogo} from './reader-logo.js?v=21';
+import {readerLogo} from './reader-logo.js?v=23';
 export const SPEC = Object.freeze({width:768.24,height:768.24*Math.SQRT2,rows:36,columns:15,bodySize:22,titleSize:26,pitch:22.44,linePitch:38,top:127.556,oddRight:643.151,evenRight:671.497});
 const NO_START = new Set(Array.from('、。，．・：；？！‼⁇⁈⁉）)]｝}〕〉》」』】〙〗〟’”｠»ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶー〜～…‥'));
 const NO_END = new Set(Array.from('（([｛{〔〈《「『【〘〖〝‘“｟«'));
@@ -256,7 +256,7 @@ export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=
       out.drawImage(img,{x:r.x,y:SPEC.height-r.y-r.height,width:r.width,height:r.height});
       if(page.clip)out.pushOperators(PDFLib.popGraphicsState());
     }
-    for(const r of page.images||[]){const img=await pdf.embedJpg(r.data);out.drawImage(img,{x:r.x,y:SPEC.height-r.y-r.height,width:r.width,height:r.height});}
+    for(const r of page.images||[]){const img=await (/^data:image\/png[;,]/i.test(r.data)?pdf.embedPng(r.data):pdf.embedJpg(r.data));out.drawImage(img,{x:r.x,y:SPEC.height-r.y-r.height,width:r.width,height:r.height});}
     for(const r of page.rules||[])out.drawRectangle({x:r.x,y:SPEC.height-r.y-r.height,width:r.width,height:r.height,color:rgb(...[1,3,5].map(i=>parseInt(r.color.slice(i,i+2),16)/255))});
     for(const cell of page.cells||[]){
       const pos=glyphPosition(font,cell);

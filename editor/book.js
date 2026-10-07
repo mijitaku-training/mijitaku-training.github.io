@@ -1,5 +1,5 @@
 import {pageGeometry} from './page-settings.js?v=21';
-import {SPEC,paginate,paginateAfterword,paginateReader,paginateToc,missingCharacters} from './layout.js?v=22';
+import {SPEC,paginate,paginateAfterword,paginateReader,paginateToc,missingCharacters} from './layout.js?v=23';
 
 export function imagePlacement(width,height,fit='contain',SPEC=pageGeometry()){
   if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)throw new Error('画像の大きさを読み取れませんでした。');
