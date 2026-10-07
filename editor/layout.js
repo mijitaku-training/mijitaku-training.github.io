@@ -70,7 +70,7 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows){
   }
   return lines;
 }
-export function paginate({title='',author='',body='',indent=true,startSide='odd',combineDigits=true,pageSettings}){
+export function paginate({title='',author='',body='',indent=true,startSide='odd',combineDigits=true,pageSettings,font}){
   title=title.trim().normalize('NFC');author=author.trim().normalize('NFC');
   if(!body.trim())throw new Error('本文を入力してください。');
   if(graphemes(body).length>50000)throw new Error('本文は50,000字までにしてください。');
@@ -101,9 +101,9 @@ export function paginate({title='',author='',body='',indent=true,startSide='odd'
     }
     pages.push({cells,lines:pageLines,offset,index,side:odd?'odd':'even',width:SPEC.width,height:SPEC.height});
   }
-  return {title,author,body:normalizeBody(body),indent,startSide,combineDigits,pages:withRuby(pages),characterCount:lines.flat().reduce((n,u)=>n+graphemes(u.text.replace(/\s/g,'')).length,0)};
+  return {title,author,body:normalizeBody(body),indent,startSide,combineDigits,pages:withRuby(pages,font),characterCount:lines.flat().reduce((n,u)=>n+graphemes(u.text.replace(/\s/g,'')).length,0)};
 }
-function paginateAfterwordLegacy({title='あとがき',author='',body='',indent=true,startSide='odd',combineDigits=true}){
+function paginateAfterwordLegacy({title='あとがき',author='',body='',indent=true,startSide='odd',combineDigits=true,font}){
   title=title.trim().normalize('NFC')||'あとがき';author=author.trim().normalize('NFC');
   if(!body.trim())throw new Error('あとがきの本文を入力してください。');
   if(graphemes(body).length>50000)throw new Error('本文は50,000字までにしてください。');
@@ -118,12 +118,35 @@ function paginateAfterwordLegacy({title='あとがき',author='',body='',indent=
     if(cursor+8>=lines.length)name.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-(pageLines.length+1)*38,y:876-name.length*22+n*22,size:22,role:'author'}));
     pages.push({cells,lines:pageLines,index,side:(index+(startSide==='even'?1:0))%2?'even':'odd',layout:'afterword'});
   }
-  return {title,author,body:normalizeBody(body),indent,startSide,combineDigits,pages:withRuby(pages)};
+  return {title,author,body:normalizeBody(body),indent,startSide,combineDigits,pages:withRuby(pages,font)};
 }
 export function plainText(text){let result=normalizeBody(text);for(const m of rubyMatches(result).reverse())result=result.slice(0,m.index)+m[1]+result.slice(m.index+m[0].length);return result.replace(/\[\[([^\n]*?)\]\]/g,'$1');}
 export function prefaceLength(text){return graphemes(plainText(text).replace(/\n/g,'')).length;}
 // Ruby uses ordinary positioned cells, so preview, PDF and WebP share one layout.
-function withRuby(pages){
+function withRuby(pages,font){
+  // Use the selected font's horizontal advance for sideways Latin letters.
+  // Keep explicit spaces, column breaks and bottom-aligned author names intact.
+  if(font)for(const page of pages){
+    const columns=new Map();
+    for(const cell of page.cells){
+      if(cell.role==='preface-heading')continue;
+      const key=`${cell.role}:${cell.x}:${cell.size}`;
+      if(!columns.has(key))columns.set(key,[]);
+      columns.get(key).push(cell);
+    }
+    for(const cells of columns.values()){
+      cells.sort((a,b)=>a.y-b.y);let saved=0;
+      for(const cell of cells){
+        cell.y-=saved;
+        if(cell.kind==='normal'&&isSideways(cell.char)){
+          const run=glyphRun(font,cell.char,true);
+          cell.advance=run.positions.reduce((n,p)=>n+p.xAdvance,0)*cell.size/font.unitsPerEm;
+          cell.kind='sideways-tight';saved+=cell.size-cell.advance;
+        }
+      }
+      if(cells[0]?.role==='author'||cells[0]?.role==='toc-author')for(const cell of cells)cell.y+=saved;
+    }
+  }
   for(const page of pages){
     const groups=new Map();
     for(const cell of page.cells){if(!cell.ruby)continue;let columns=groups.get(cell.ruby);if(!columns)groups.set(cell.ruby,columns=new Map());const key=cell.x+':'+cell.role;if(!columns.has(key))columns.set(key,[]);columns.get(key).push(cell);}
@@ -131,13 +154,13 @@ function withRuby(pages){
       const first=cells[0],last=cells.at(-1),reading=graphemes(ruby.reading);
       const start=Math.floor(first.rubyIndex*reading.length/ruby.total),end=Math.floor((last.rubyIndex+1)*reading.length/ruby.total),part=reading.slice(start,end);
       if(!part.length)continue;
-      const span=last.y-first.y+first.size,size=Math.min(first.size*.42,span/part.length),top=first.y+(span-part.length*size)/2;
+      const span=last.y-first.y+(last.advance??first.size),size=Math.min(first.size*.42,span/part.length),top=first.y+(span-part.length*size)/2;
       part.forEach((char,n)=>page.cells.push({char,source:char,kind:'normal',x:first.x+first.size+1,y:top+n*size,size,role:'ruby'}));
     }
   }
   return pages;
 }
-function paginateReaderLegacy({title='',author='',body='',preface='',indent=true,startSide='odd',combineDigits=true}){
+function paginateReaderLegacy({title='',author='',body='',preface='',indent=true,startSide='odd',combineDigits=true,font}){
   title=title.trim().normalize('NFC');author=author.trim().normalize('NFC');
   if(!title)throw new Error('読者寄稿のタイトルを入力してください。');
   if(!author)throw new Error('読者寄稿の作者名を入力してください。');
@@ -170,9 +193,9 @@ function paginateReaderLegacy({title='',author='',body='',preface='',indent=true
     }
     pages.push(page);
   }
-  return {title,author,body:normalizeBody(body),preface,indent,startSide,combineDigits,pages:withRuby(pages)};
+  return {title,author,body:normalizeBody(body),preface,indent,startSide,combineDigits,pages:withRuby(pages,font)};
 }
-function paginateTocLegacy({entries=[]}){
+function paginateTocLegacy({entries=[],font}){
   const rows=entries.filter(e=>e.title?.trim()||e.author?.trim());
   if(!rows.length)throw new Error('目次に作品タイトルを入力してください。');
   if(rows.length>10)throw new Error('目次は、あとがきを含めて10項目までです。');
@@ -193,7 +216,7 @@ function paginateTocLegacy({entries=[]}){
     author.forEach((u,n)=>add(u,x,authorTop+n*22,22,'toc-author'));
     label.forEach((u,n)=>add(u,x+4,labelTop+n*14,14,'toc-reader'));
   });
-  return {title:'目次',author:'',pages:withRuby([{cells,index:0,layout:'toc'}])};
+  return {title:'目次',author:'',pages:withRuby([{cells,index:0,layout:'toc'}],font)};
 }
 export function isSideways(char){return !/^[0-9０-９!?！？]+$/u.test(char)&&/^[\u0021-\u007e\u00a1-\u024f]/u.test(char);}
 const HORIZONTAL_FEATURES={kern:false,liga:false,clig:false};
@@ -206,7 +229,7 @@ export function glyphPosition(font,cell){
   if(combined)fontSize*=Math.min(1, font.unitsPerEm/Math.max(advance,1));
   const scale=fontSize/font.unitsPerEm;
   const width=run.positions.reduce((n,p)=>n+p.xAdvance,0)*scale;
-  const pad=(cell.size-width)/2;
+  const pad=cell.kind==='sideways-tight'?0:(cell.size-width)/2;
   let baseline=cell.y+cell.size*.88;
   if(combined){
     const minY=Math.min(...run.glyphs.map((g,i)=>g.bbox.minY+run.positions[i].yOffset));
