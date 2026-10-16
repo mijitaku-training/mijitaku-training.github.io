@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23192544'/%3E%3Cpath d='M10 7v18M16 7v18M22 7v12' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css?v=21">
   <script src="assets/fontkit.js" defer></script><script src="assets/pdf-lib.js" defer></script>
-  <script type="module" src="app.js?v=31"></script>
+  <script type="module" src="app.js?v=32"></script>
 </head>
 <body>
   <header class="masthead"><div class="brand"><span class="brand-mark" aria-hidden="true">身</span><h1>身仕度 <span>組版室</span></h1></div><span class="version">編集の試作版 <b>0.3</b></span></header>
@@ -43,7 +43,7 @@
         <details class="settings"><summary>組み方・フォント</summary><div class="settings-content">
           <label class="check"><input id="indent" type="checkbox" checked> 段落の頭を1字下げる</label>
           <label class="check"><input id="combine-digits" type="checkbox" checked> 2桁の数字を組文字にする（縦中横）</label>
-          <p>1桁の数字は正立、2桁は横並び、3桁以上は1字ずつ縦に並びます。「!?」「!!」「??」も横並びにします。全角の数字・記号にも対応します。</p>
+          <p>1桁の数字は正立、2桁は設定がオンなら横並び（縦中横）にします。3桁以上の半角数字は、英単語のように横書きを90度回転させて並べます。全角数字は3桁以上でも正立のまま1字ずつ縦に並べます。「!?」「!!」「??」も横並びにします。全角の記号にも対応します。</p>
           <label class="setting-row" for="start-side">冊子1ページ目の位置<select id="start-side"><option value="odd">奇数ページから</option><option value="even">偶数ページから</option></select></label>
           <p>各作品の本文位置は、冊子内の順番に合わせて自動調整します。</p>
           <p>通常の本文：初期設定は縦書き／36字 × 15行／本文22pt／タイトル26pt。作品の1ページ目はタイトルと作者の場所を空けます。</p>

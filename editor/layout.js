@@ -40,10 +40,11 @@ export function textUnits(text,{combineDigits=true,markup=true}={}){
       const original=selected.join('');units.push({text:original,display:narrow(original),kind:'tcy'});i=end+2;continue;
     }
     if(/^[0-9０-９]$/u.test(chars[i])){
-      let end=i+1;while(end<chars.length&&/^[0-9０-９]$/u.test(chars[end]))end++;
+      const half=/^[0-9]$/u.test(chars[i]),pattern=half?/^[0-9]$/u:/^[０-９]$/u;
+      let end=i+1;while(end<chars.length&&pattern.test(chars[end]))end++;
       const digits=chars.slice(i,end).join('');
       if(combineDigits&&end-i===2)units.push({text:digits,display:narrow(digits),kind:'tcy'});
-      else for(const digit of chars.slice(i,end))units.push({text:digit,display:digit,kind:'upright'});
+      else for(const digit of chars.slice(i,end))units.push({text:digit,display:digit,kind:half&&end-i>=3?'sideways-digit':'upright'});
       i=end;continue;
     }
     if(/^[!?！？]$/u.test(chars[i])){
@@ -146,7 +147,7 @@ function withRuby(pages,font){
       cells.sort((a,b)=>a.y-b.y);let saved=0;
       for(const cell of cells){
         cell.y-=saved;
-        if(cell.kind==='normal'&&isSideways(cell.char)){
+        if(cell.kind==='sideways-digit'||(cell.kind==='normal'&&isSideways(cell.char))){
           const active=cell.italic&&font.italicFont?font.italicFont:font;const run=glyphRun(active,cell.char,true);
           cell.advance=run.positions.reduce((n,p)=>n+p.xAdvance,0)*cell.size/active.unitsPerEm;
           cell.kind='sideways-tight';saved+=cell.size-cell.advance;
@@ -232,7 +233,7 @@ export function glyphRun(font,char,horizontal=false){return font.layout(char,hor
 export function glyphPosition(font,cell){
   font=cell.italic&&font.italicFont?font.italicFont:font;
   const combined=cell.kind==='tcy';
-  const sideways=!combined&&cell.kind!=='upright'&&isSideways(cell.char),run=glyphRun(font,cell.char,combined||sideways);
+  const sideways=cell.kind==='sideways-digit'||cell.kind==='sideways-tight'||(!combined&&cell.kind!=='upright'&&isSideways(cell.char)),run=glyphRun(font,cell.char,combined||sideways);
   let fontSize=cell.size;
   const advance=run.positions.reduce((n,p)=>n+p.xAdvance,0);
   if(combined)fontSize*=Math.min(1, font.unitsPerEm/Math.max(advance,1));
