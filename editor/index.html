@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23192544'/%3E%3Cpath d='M10 7v18M16 7v18M22 7v12' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css?v=21">
   <script src="assets/fontkit.js" defer></script><script src="assets/pdf-lib.js" defer></script>
-  <script type="module" src="app.js?v=30"></script>
+  <script type="module" src="app.js?v=31"></script>
 </head>
 <body>
   <header class="masthead"><div class="brand"><span class="brand-mark" aria-hidden="true">身</span><h1>身仕度 <span>組版室</span></h1></div><span class="version">編集の試作版 <b>0.3</b></span></header>
@@ -22,7 +22,7 @@
   <main>
     <section class="book-outline" aria-labelledby="book-heading">
       <div class="section-heading"><h2 id="book-heading">ページを並べる</h2><span class="step">01</span></div>
-      <div class="add-controls"><button id="add-toc" type="button">＋ 目次</button><button id="add-text" type="button">＋ 本文</button><button id="add-reader" type="button">＋ 読者寄稿</button><button id="add-afterword" type="button">＋ あとがき</button><button id="add-image" type="button">＋ 画像</button><button id="add-pdf" type="button">＋ PDF</button></div>
+      <div class="add-controls"><button id="add-toc" type="button">＋ 目次</button><button id="add-text" type="button">＋ 本文</button><button id="add-reader" type="button">＋ 読者寄稿</button><button id="add-afterword" type="button">＋ あとがき</button><button id="add-image" type="button">＋ 画像</button><button id="add-pdf" type="button">＋ PDF</button><button id="add-blank" type="button">＋ 白紙ページ</button></div>
       <input id="image-files" type="file" accept="image/*" multiple hidden>
       <input id="pdf-files" type="file" accept="application/pdf,.pdf" hidden>
       <ol id="book-list" class="book-list" aria-label="PDFに入れる順番"></ol>
@@ -63,6 +63,11 @@
         <p>本文と作品PDFを取り込みます。画像・作品外PDFは取り込みません。取り込み後も編集できます。作品名・順番・PDFの種類を変えた場合は、もう一度取り込んでください。あとがきを含め10項目まで。</p>
         <div id="toc-entries"></div>
         <button id="toc-preview" class="primary" type="button">並び順で確認</button>
+      </div>
+      <div id="blank-editor" hidden>
+        <p>何も印刷しない白紙を1ページ挿入します。目次には載せず、冊子のページ数には数えます。</p>
+        <p>「ページを並べる」の矢印で位置を調整できます。プレビューの「白紙ページ」という表示はページ外の目印で、PDF・サイト用画像には入りません。</p>
+        <button id="blank-preview" type="button" class="primary">並び順で確認</button>
       </div>
       <div id="image-editor" hidden>
         <div class="field"><label for="image-title">一覧に表示する名前</label><input id="image-title" type="text" maxlength="100" placeholder="例：10月号のイラスト"></div>

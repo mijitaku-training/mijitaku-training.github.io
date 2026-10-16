@@ -279,7 +279,7 @@ export function missingCharacters(doc,font){
 export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=>{}){
   const {PDFDocument,rgb,degrees}=PDFLib;
   const pdf=await PDFDocument.create();pdf.registerFontkit(fontkit);
-  const hasText=doc.pages.some(p=>p.kind!=='image');
+  const hasText=doc.pages.some(p=>p.cells?.length);
   const verticalFont=hasText?await pdf.embedFont(fontBytes,{subset:false,features:['vert','vrt2']}):null;
   const horizontalFont=hasText?await pdf.embedFont(fontBytes,{subset:false,features:HORIZONTAL_FEATURES}):null;
   pdf.setTitle(doc.title||'身仕度');pdf.setAuthor(doc.author||'');pdf.setCreator('身仕度 組版室 v0.3');pdf.setSubject('月刊身仕度');

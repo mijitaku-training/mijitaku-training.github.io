@@ -31,6 +31,7 @@ export function validateProject(input){
     if(i.fontChoice==='custom'&&!setting.fontData)fail();
     let pdfRatio;
     if(i.pdfRatio){const r=normalizePageSettings(i.pdfRatio);pdfRatio={mode:r.mode,ratioWidth:r.ratioWidth,ratioHeight:r.ratioHeight};}
+    if(i.kind==='blank')return {...setting,id,kind:'blank',title:'白紙ページ'};
     if(i.kind==='text'){
       if(i.layout&&!['afterword','reader'].includes(i.layout))fail();
       return {...setting,id,kind:'text',title,author:str(i.author,1000),body:str(i.body,200000),preface:str(i.preface||'',2000),indent:i.indent!==false,combineDigits:i.combineDigits!==false,...(i.layout?{layout:i.layout}:{})};

@@ -1,8 +1,8 @@
 import {DEFAULT_PAGE_SETTINGS,normalizePageSettings,pageGeometry,applyPageSettings} from './page-settings.js?v=21';
-import {saveDraft,readDraft,makeProject,validateProject,bytesToBase64,base64ToBytes} from './storage.js?v=30';
-import {createWebZip} from './web-export.js?v=30';
-import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=30';
-import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=30';
+import {saveDraft,readDraft,makeProject,validateProject,bytesToBase64,base64ToBytes} from './storage.js?v=31';
+import {createWebZip} from './web-export.js?v=31';
+import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=31';
+import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=31';
 import {readPdfFile,restorePdfSizes} from './pdf-import.js?v=21';
 const $=id=>document.getElementById(id);
 let font,fontBytes,proof,currentPage=0,busy=false,objectUrl,revision=0,pdfFile,sharing=false,pdfOutput=null;
@@ -79,7 +79,7 @@ function renderList(){
     const li=document.createElement('li');li.className='book-row'+(item.id===selectedId?' selected':'');
     const select=document.createElement('button');select.type='button';select.className='item-select';select.dataset.action='select';select.dataset.id=item.id;select.setAttribute('aria-current',item.id===selectedId?'true':'false');
     const name=document.createElement('span');name.className='item-name';name.textContent=`${String(index+1).padStart(2,'0')}　${item.title|| (item.kind==='text'?'タイトル未入力':'画像ページ')}`;
-    const detail=document.createElement('span');detail.className='item-detail';const section=proof?.sections.find(s=>s.id===item.id);detail.textContent=(item.kind==='pdf'?`${item.tocInclude===false?'作品外PDF（目次なし）':'作品PDF'}・${item.pdf.pages.length}ページ`+(item.author?'・'+item.author:''):item.kind==='toc'?'目次':item.kind==='text'?(item.layout==='reader'?'読者寄稿':item.layout==='afterword'?'あとがき':'本文')+(item.author?'・'+item.author:''):'画像')+(section?`・${section.start}〜${section.start+section.count-1}ページ`:'');select.append(name,detail);li.append(select);
+    const detail=document.createElement('span');detail.className='item-detail';const section=proof?.sections.find(s=>s.id===item.id);detail.textContent=(item.kind==='pdf'?`${item.tocInclude===false?'作品外PDF（目次なし）':'作品PDF'}・${item.pdf.pages.length}ページ`+(item.author?'・'+item.author:''):item.kind==='toc'?'目次':item.kind==='text'?(item.layout==='reader'?'読者寄稿':item.layout==='afterword'?'あとがき':'本文')+(item.author?'・'+item.author:''):item.kind==='blank'?'白紙・1ページ（目次なし）':'画像')+(section?`・${section.start}〜${section.start+section.count-1}ページ`:'');select.append(name,detail);li.append(select);
     const controls=document.createElement('div');controls.className='item-controls';
     for(const [action,label,glyph,disabled] of [['up','前へ移動','↑',index===0],['down','後ろへ移動','↓',index===items.length-1],['remove','削除','削除',false]]){
       const button=document.createElement('button');button.type='button';button.dataset.action=action;button.dataset.id=item.id;button.setAttribute('aria-label',`${item.title||'ページ'}を${label}`);button.textContent=glyph;button.disabled=busy||disabled;controls.append(button);
@@ -90,8 +90,9 @@ function renderList(){
 }
 function renderEditor(){
   closePageSettings();syncFontChoice();
-  const item=selectedItem();const image=item?.kind==='image',toc=item?.kind==='toc',pdf=item?.kind==='pdf';$('manuscript-form').hidden=image||toc||pdf;$('image-editor').hidden=!image;$('toc-editor').hidden=!toc;$('pdf-editor').hidden=!pdf;if(toc)renderToc();
+  const item=selectedItem();const image=item?.kind==='image',toc=item?.kind==='toc',pdf=item?.kind==='pdf',blank=item?.kind==='blank';$('manuscript-form').hidden=image||toc||pdf||blank;$('blank-editor').hidden=!blank;$('image-editor').hidden=!image;$('toc-editor').hidden=!toc;$('pdf-editor').hidden=!pdf;if(toc)renderToc();
   $('input-heading').textContent=toc?'目次を作る':image?'画像を入れる':item?.layout==='reader'?'読者寄稿を入れる':item?.layout==='afterword'?'あとがきを入れる':'原稿を入れる';
+  if(blank)$('input-heading').textContent='白紙ページ';
   if(pdf){const extra=item.tocInclude===false;$('input-heading').textContent=extra?'作品外PDFを入れる':'PDF作品を入れる';$('pdf-kind').value=extra?'extra':'work';$('pdf-title').value=item.title;$('pdf-author').value=item.author||'';$('pdf-description').textContent=`${item.pdf.name}・全${item.pdf.pages.length}ページ`;$('pdf-toc-help').textContent=(extra?'このPDFは目次の自動取り込みから除外します。':'このPDFは1作品として、タイトルと作者名を目次に取り込みます。')+' すでに作った目次へ反映するには、目次の「並べた作品から取り込む」を押してください。';document.querySelector('label[for="pdf-title"]').textContent=extra?'一覧に表示する名前':'作品タイトル（一覧・目次用）';$('pdf-author').closest('.field').hidden=extra;}
   $('afterword-help').hidden=item?.layout!=='afterword';
   $('reader-fields').hidden=item?.layout!=='reader';$('preface').value=item?.preface||'';updatePrefaceCount();
@@ -102,7 +103,7 @@ function renderEditor(){
 }
 function selectItem(id){saveCurrent();selectedId=id;scheduleDraft();renderEditor();renderList();if(proof){const index=proof.pages.findIndex(p=>p.itemId===id);if(index>=0){currentPage=index;showPage();}}}
 function message(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
-function setBusy(value){busy=value;$('preview-button').disabled=value||!font;$('sample-button').disabled=value;$('export').disabled=value||!proof;$('export-web').disabled=value||!proof;$('font-file').disabled=value;$("font-choice").disabled=value;$("italic-font-choice").disabled=value;for(const control of document.querySelectorAll('.page-settings input,.page-settings select,.page-settings button'))control.disabled=value||(!value&&$('margin-fields').disabled&&control.id.startsWith('margin-'));for(const id of ['import-project','backup-project','save-draft','clear-project','undo-clear','add-toc','toc-import','toc-add','toc-preview','add-text','add-reader','add-image','add-afterword','replace-image','image-preview','add-pdf','replace-pdf','pdf-preview','pdf-title','pdf-author','pdf-kind'])$(id).disabled=value;renderList();if(selectedItem()?.kind==='toc')renderToc();}
+function setBusy(value){busy=value;$('preview-button').disabled=value||!font;$('sample-button').disabled=value;$('export').disabled=value||!proof;$('export-web').disabled=value||!proof;$('font-file').disabled=value;$("font-choice").disabled=value;$("italic-font-choice").disabled=value;for(const control of document.querySelectorAll('.page-settings input,.page-settings select,.page-settings button'))control.disabled=value||(!value&&$('margin-fields').disabled&&control.id.startsWith('margin-'));for(const id of ['import-project','backup-project','save-draft','clear-project','undo-clear','add-blank','blank-preview','add-toc','toc-import','toc-add','toc-preview','add-text','add-reader','add-image','add-afterword','replace-image','image-preview','add-pdf','replace-pdf','pdf-preview','pdf-title','pdf-author','pdf-kind'])$(id).disabled=value;renderList();if(selectedItem()?.kind==='toc')renderToc();}
 function inputs(){return {preface:$('preface').value,title:$('title').value,author:$('author').value,body:$('body').value,indent:$('indent').checked,startSide:$('start-side').value,combineDigits:$('combine-digits').checked};}
 function updatePrefaceCount(){$('preface-count').textContent=prefaceLength($('preface').value)+' / 150文字';}
 function invalidate(){saveCurrent();scheduleDraft();updatePrefaceCount();revision++;proof=null;pdfFile=null;$('export').disabled=true;$('export-web').disabled=true;$('download-area').hidden=true;$('web-download-area').hidden=true;webFile=null;$('proof-note').textContent='内容を変更しました。「並び順で確認」で更新してください。';$('page-info').textContent='変更は未反映';$('char-count').textContent=graphemes(plainText($('body').value).replace(/\s/g,'')).length.toLocaleString('ja')+'字';renderList();}
@@ -222,6 +223,16 @@ $('toc-entries').addEventListener('click',event=>{
   renderToc();invalidate();
 });
 $('toc-preview').addEventListener('click',()=>{if(!busy)typeset(true);});
+$('blank-preview').addEventListener('click',()=>{if(!busy)typeset(true);});
+$('add-blank').addEventListener('click',()=>{
+  if(busy)return;saveCurrent();
+  if(items.length>=300){message('項目数は300以内にしてください。',true);return;}
+  if(items.length===1&&items[0].kind==='text'&&!items[0].title&&!items[0].author&&!items[0].body&&!items[0].preface)items=[];
+  const item={id:'item-'+serial++,kind:'blank',title:'白紙ページ'};
+  const position=items.findIndex(i=>i.id===selectedId);
+  items.splice(position+1,0,item);selectedId=item.id;renderEditor();invalidate();
+  message('選んでいた項目の直後に白紙を1ページ挿入しました。「並び順で確認」で位置を確認できます。');
+});
 $('add-reader').addEventListener('click',()=>{
   if(busy)return;saveCurrent();
   const item={...newText(),layout:'reader',preface:''};
