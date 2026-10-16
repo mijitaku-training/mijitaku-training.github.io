@@ -1,8 +1,8 @@
 import {DEFAULT_PAGE_SETTINGS,normalizePageSettings,pageGeometry,applyPageSettings} from './page-settings.js?v=21';
-import {saveDraft,readDraft,makeProject,validateProject,bytesToBase64,base64ToBytes} from './storage.js?v=21';
-import {createWebZip} from './web-export.js?v=29';
-import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=29';
-import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=29';
+import {saveDraft,readDraft,makeProject,validateProject,bytesToBase64,base64ToBytes} from './storage.js?v=30';
+import {createWebZip} from './web-export.js?v=30';
+import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=30';
+import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=30';
 import {readPdfFile,restorePdfSizes} from './pdf-import.js?v=21';
 const $=id=>document.getElementById(id);
 let font,fontBytes,proof,currentPage=0,busy=false,objectUrl,revision=0,pdfFile,sharing=false,pdfOutput=null;
@@ -53,7 +53,7 @@ function commitPageSettings(){
     const candidates=applyPageSettings(items,{scope,selectedId:settingsItemId,settings:value});
     // Verify completed items before committing; unfinished manuscripts can remain drafts.
     const ready=candidates.filter(i=>i.kind==='text'?i.body.trim():i.kind==='toc'?i.entries.some(e=>e.title?.trim()):true);
-    if(ready.length)buildBook(ready,{font,startSide:$('start-side').value,pageSettings});
+    if(ready.length)buildBook(ready,{font,resolveFont:resolveItemFont,startSide:$('start-side').value,pageSettings});
     items=candidates;if(scope!=='selected')pageSettings={...value};
     closePageSettings();invalidate();
     if(ready.length===items.length)typeset(false);
@@ -89,7 +89,7 @@ function renderList(){
   $('preview-button').textContent=items.length>1?'並び順で確認':'縦書きで確認';
 }
 function renderEditor(){
-  closePageSettings();
+  closePageSettings();syncFontChoice();
   const item=selectedItem();const image=item?.kind==='image',toc=item?.kind==='toc',pdf=item?.kind==='pdf';$('manuscript-form').hidden=image||toc||pdf;$('image-editor').hidden=!image;$('toc-editor').hidden=!toc;$('pdf-editor').hidden=!pdf;if(toc)renderToc();
   $('input-heading').textContent=toc?'目次を作る':image?'画像を入れる':item?.layout==='reader'?'読者寄稿を入れる':item?.layout==='afterword'?'あとがきを入れる':'原稿を入れる';
   if(pdf){const extra=item.tocInclude===false;$('input-heading').textContent=extra?'作品外PDFを入れる':'PDF作品を入れる';$('pdf-kind').value=extra?'extra':'work';$('pdf-title').value=item.title;$('pdf-author').value=item.author||'';$('pdf-description').textContent=`${item.pdf.name}・全${item.pdf.pages.length}ページ`;$('pdf-toc-help').textContent=(extra?'このPDFは目次の自動取り込みから除外します。':'このPDFは1作品として、タイトルと作者名を目次に取り込みます。')+' すでに作った目次へ反映するには、目次の「並べた作品から取り込む」を押してください。';document.querySelector('label[for="pdf-title"]').textContent=extra?'一覧に表示する名前':'作品タイトル（一覧・目次用）';$('pdf-author').closest('.field').hidden=extra;}
@@ -102,7 +102,7 @@ function renderEditor(){
 }
 function selectItem(id){saveCurrent();selectedId=id;scheduleDraft();renderEditor();renderList();if(proof){const index=proof.pages.findIndex(p=>p.itemId===id);if(index>=0){currentPage=index;showPage();}}}
 function message(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
-function setBusy(value){busy=value;$('preview-button').disabled=value||!font;$('sample-button').disabled=value;$('export').disabled=value||!proof;$('export-web').disabled=value||!proof;$('font-file').disabled=value;$("font-choice").disabled=value;for(const control of document.querySelectorAll('.page-settings input,.page-settings select,.page-settings button'))control.disabled=value||(!value&&$('margin-fields').disabled&&control.id.startsWith('margin-'));for(const id of ['import-project','backup-project','save-draft','clear-project','undo-clear','add-toc','toc-import','toc-add','toc-preview','add-text','add-reader','add-image','add-afterword','replace-image','image-preview','add-pdf','replace-pdf','pdf-preview','pdf-title','pdf-author','pdf-kind'])$(id).disabled=value;renderList();if(selectedItem()?.kind==='toc')renderToc();}
+function setBusy(value){busy=value;$('preview-button').disabled=value||!font;$('sample-button').disabled=value;$('export').disabled=value||!proof;$('export-web').disabled=value||!proof;$('font-file').disabled=value;$("font-choice").disabled=value;$("italic-font-choice").disabled=value;for(const control of document.querySelectorAll('.page-settings input,.page-settings select,.page-settings button'))control.disabled=value||(!value&&$('margin-fields').disabled&&control.id.startsWith('margin-'));for(const id of ['import-project','backup-project','save-draft','clear-project','undo-clear','add-toc','toc-import','toc-add','toc-preview','add-text','add-reader','add-image','add-afterword','replace-image','image-preview','add-pdf','replace-pdf','pdf-preview','pdf-title','pdf-author','pdf-kind'])$(id).disabled=value;renderList();if(selectedItem()?.kind==='toc')renderToc();}
 function inputs(){return {preface:$('preface').value,title:$('title').value,author:$('author').value,body:$('body').value,indent:$('indent').checked,startSide:$('start-side').value,combineDigits:$('combine-digits').checked};}
 function updatePrefaceCount(){$('preface-count').textContent=prefaceLength($('preface').value)+' / 150文字';}
 function invalidate(){saveCurrent();scheduleDraft();updatePrefaceCount();revision++;proof=null;pdfFile=null;$('export').disabled=true;$('export-web').disabled=true;$('download-area').hidden=true;$('web-download-area').hidden=true;webFile=null;$('proof-note').textContent='内容を変更しました。「並び順で確認」で更新してください。';$('page-info').textContent='変更は未反映';$('char-count').textContent=graphemes(plainText($('body').value).replace(/\s/g,'')).length.toLocaleString('ja')+'字';renderList();}
@@ -131,7 +131,7 @@ $('preview-mode').addEventListener('change',()=>{previewMode=$('preview-mode').v
 function typeset(scroll=false){
   if(!font&&items.some(i=>i.kind!=='image')){message('フォントの準備が終わるまでお待ちください。');return null;}
   try{
-    saveCurrent();const next=buildBook(items,{font,startSide:$('start-side').value,pageSettings});
+    saveCurrent();const next=buildBook(items,{font,resolveFont:resolveItemFont,startSide:$('start-side').value,pageSettings});
     proof=next;proofStartSide=$('start-side').value;currentPage=Math.max(0,proof.pages.findIndex(p=>p.itemId===selectedId));showPage();$('export').disabled=busy;$('export-web').disabled=busy;renderList();
     $('proof-note').textContent=`${proof.sections.length}作品・全${proof.pages.length}ページ`;
     $('download-area').hidden=true;$('web-download-area').hidden=true;webFile=null;pdfFile=null;message('組版できました。ページを確認してPDFを作れます。');
@@ -146,18 +146,36 @@ async function loadFont(bytes,name,custom=false){
   font=candidate;fontBytes=new Uint8Array(bytes);currentFontName=name;customFont=custom?{name,data:bytesToBase64(fontBytes)}:null;$('font-name').textContent=`使用フォント：${name}`;invalidate();
   syncFontChoice();
 }
-function syncFontChoice(){
-  $('font-choice').value=currentFontName==='ZENオールド明朝'?'mincho':currentFontName==='ZEN角ゴシック Antique'?'gothic':'custom';
+const fontCache=new Map();
+async function prepareFont(choice,data){
+  const key=choice==='custom'?data?.data:choice;
+  if(!key)throw new Error('読み込んだフォントがありません。');
+  if(fontCache.has(key))return fontCache.get(key);
+  let bytes;
+  if(choice==='custom')bytes=base64ToBytes(data.data);
+  else{const response=await fetch('assets/'+(choice==='gothic'?'ZenKakuGothicAntique-Regular.ttf':'ZenOldMincho-Regular.ttf'));if(!response.ok)throw new Error('フォントを読み込めませんでした。');bytes=new Uint8Array(await response.arrayBuffer());}
+  const parsed=window.fontkit.create(bytes);if(!parsed.layout||!parsed.hasGlyphForCodePoint(12354))throw new Error('日本語フォントを選んでください。');
+  parsed.sourceBytes=bytes;fontCache.set(key,parsed);return parsed;
 }
-$('font-choice').addEventListener('change',async()=>{
-  const choice=$('font-choice').value;if(busy||choice==='custom'){syncFontChoice();return;}
+function resolveItemFont(item){
+  const choice=item.fontChoice||'legacy';
+  const base=choice==='legacy'?font:fontCache.get(choice==='custom'?item.fontData?.data:choice);
+  if(!base)throw new Error('フォントの準備中です。');
+  const result=Object.create(base);result.sourceBytes=base.sourceBytes||fontBytes;
+  result.italicFont=item.italicFont&&item.italicFont!=='same'?fontCache.get(item.italicFont):base;
+  return result;
+}
+function syncFontChoice(){
+  const item=selectedItem(),choice=item?.fontChoice||'legacy';
+  $('font-choice').value=choice==='legacy'?(currentFontName==='ZENオールド明朝'?'mincho':currentFontName==='ZEN角ゴシック Antique'?'gothic':'custom'):choice;
+  $('italic-font-choice').value=item?.italicFont||'same';
+  $('font-name').textContent='この作品の基本フォント：'+({mincho:'ZENオールド明朝',gothic:'ZEN角ゴシック Antique',custom:item?.fontData?.name||currentFontName}[$('font-choice').value]);
+}
+for(const id of ['font-choice','italic-font-choice'])$(id).addEventListener('change',async()=>{
+  if(busy)return;const item=selectedItem(),choice=$(id).value;if(!item||item.kind!=='text')return;
   setBusy(true);
-  try{
-    const gothic=choice==='gothic',path=gothic?'ZenKakuGothicAntique-Regular.ttf':'ZenOldMincho-Regular.ttf';
-    const response=await fetch('assets/'+path);if(!response.ok)throw new Error('フォントを読み込めませんでした。');
-    await loadFont(await response.arrayBuffer(),gothic?'ZEN角ゴシック Antique':'ZENオールド明朝',gothic);
-    message('フォントを切り替えました。「縦書きで確認」で誌面を更新してください。');
-  }catch(error){syncFontChoice();message(error.message,true);}finally{setBusy(false);}
+  try{if(choice!=='same')await prepareFont(choice,item.fontData);item[id==='font-choice'?'fontChoice':'italicFont']=choice;invalidate();syncFontChoice();message('この作品のフォントを変更しました。プレビューを更新してください。');}
+  catch(error){syncFontChoice();message(error.message,true);}finally{setBusy(false);}
 });
 $('manuscript-form').addEventListener('submit',event=>{event.preventDefault();if(!busy)typeset(true);});
 $('image-preview').addEventListener('click',()=>{if(!busy)typeset(true);});
@@ -340,7 +358,7 @@ $('sample-button').addEventListener('click',async()=>{
 });
 $('font-file').addEventListener('change',async event=>{
   const file=event.target.files[0];if(!file)return;setBusy(true);
-  try{if(file.size>20*1024*1024)throw new Error('20MB以下のフォントを選んでください。');await loadFont(await file.arrayBuffer(),file.name,true);message('フォントを切り替えました。「縦書きで確認」で更新できます。');}
+  try{if(file.size>20*1024*1024)throw new Error('20MB以下のフォントを選んでください。');const data={name:file.name,data:bytesToBase64(new Uint8Array(await file.arrayBuffer()))};await prepareFont('custom',data);const item=selectedItem();item.fontChoice='custom';item.fontData=data;invalidate();syncFontChoice();message('フォントを切り替えました。「縦書きで確認」で更新できます。');}
   catch(error){message('フォントを読み込めませんでした。'+error.message,true);}finally{setBusy(false);}
 });
 function pdfName(fallback){
@@ -425,6 +443,8 @@ async function restoreProject(data){
   if(state.font){bytes=base64ToBytes(state.font.data);name=state.font.name;}
   else{const r=await fetch('assets/ZenOldMincho-Regular.ttf');if(!r.ok)throw new Error('フォントを読み込めませんでした。');bytes=new Uint8Array(await r.arrayBuffer());name='ZENオールド明朝';}
   const candidate=window.fontkit.create(bytes);if(!candidate.layout||!candidate.hasGlyphForCodePoint('あ'.codePointAt(0)))throw new Error('編集データのフォントを読み込めませんでした。');
+  candidate.sourceBytes=bytes;
+  for(const item of state.items){if(item.fontChoice&&item.fontChoice!=='legacy')await prepareFont(item.fontChoice,item.fontData);if(item.italicFont&&item.italicFont!=='same')await prepareFont(item.italicFont);}
   const wasReady=draftReady;draftReady=false;
   try{
     pageSettings=state.pageSettings;closePageSettings();font=candidate;fontBytes=bytes;currentFontName=name;customFont=state.font;items=state.items;selectedId=state.selectedId;

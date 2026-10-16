@@ -1,5 +1,5 @@
 import {pageGeometry} from './page-settings.js?v=21';
-import {SPEC,paginate,paginateAfterword,paginateReader,paginateToc,missingCharacters} from './layout.js?v=29';
+import {SPEC,paginate,paginateAfterword,paginateReader,paginateToc,missingCharacters} from './layout.js?v=30';
 
 export function imagePlacement(width,height,fit='contain',SPEC=pageGeometry()){
   if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)throw new Error('画像の大きさを読み取れませんでした。');
@@ -7,7 +7,7 @@ export function imagePlacement(width,height,fit='contain',SPEC=pageGeometry()){
   const w=width*scale,h=height*scale;
   return {x:(SPEC.width-w)/2,y:(SPEC.height-h)/2,width:w,height:h};
 }
-export function buildBook(items,{font,startSide='odd',title='身仕度_まとめ',pageSettings}={}){
+export function buildBook(items,{font,resolveFont,startSide='odd',title='身仕度_まとめ',pageSettings}={}){
   if(!items.length)throw new Error('本文か画像を追加してください。');
   const pages=[],sections=[];
   for(const [number,item] of items.entries()){
@@ -15,9 +15,10 @@ export function buildBook(items,{font,startSide='odd',title='身仕度_まとめ
     const start=pages.length;
     const effective=item.pageSettings||pageSettings,geometry=pageGeometry(effective);
     if(item.kind==='text'||item.kind==='toc'){
-      let doc;try{doc=(item.kind==='toc'?paginateToc:item.layout==='reader'?paginateReader:item.layout==='afterword'?paginateAfterword:paginate)({...item,font,pageSettings:effective,startSide:(start+(startSide==='even'?1:0))%2?'even':'odd'});}catch(error){throw new Error(`${number+1}番目「${itemTitle}」：${error.message}`);}
-      if(font){const missing=missingCharacters(doc,font);if(missing.length)throw new Error(`「${itemTitle}」のフォントにない文字：${missing.slice(0,12).join(' ')}。文字かフォントを変更してください。`);}
-      for(const p of doc.pages)pages.push({...p,index:pages.length,itemId:item.id,itemTitle,itemPage:p.index+1});
+      const itemFont=resolveFont?resolveFont(item):font;
+      let doc;try{doc=(item.kind==='toc'?paginateToc:item.layout==='reader'?paginateReader:item.layout==='afterword'?paginateAfterword:paginate)({...item,font:itemFont,pageSettings:effective,startSide:(start+(startSide==='even'?1:0))%2?'even':'odd'});}catch(error){throw new Error(`${number+1}番目「${itemTitle}」：${error.message}`);}
+      if(itemFont){const missing=missingCharacters(doc,itemFont);if(missing.length)throw new Error(`「${itemTitle}」のフォントにない文字：${missing.slice(0,12).join(' ')}。文字かフォントを変更してください。`);}
+      for(const p of doc.pages)pages.push({...p,font:itemFont,index:pages.length,itemId:item.id,itemTitle,itemPage:p.index+1});
     }else if(item.kind==='pdf'){
       if(!item.pdf?.pages?.length||!item.pdf.data)throw new Error(`「${itemTitle}」のPDFを選び直してください。`);
       item.pdf.pages.forEach((image,pdfIndex)=>{

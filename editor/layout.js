@@ -147,8 +147,8 @@ function withRuby(pages,font){
       for(const cell of cells){
         cell.y-=saved;
         if(cell.kind==='normal'&&isSideways(cell.char)){
-          const run=glyphRun(font,cell.char,true);
-          cell.advance=run.positions.reduce((n,p)=>n+p.xAdvance,0)*cell.size/font.unitsPerEm;
+          const active=cell.italic&&font.italicFont?font.italicFont:font;const run=glyphRun(active,cell.char,true);
+          cell.advance=run.positions.reduce((n,p)=>n+p.xAdvance,0)*cell.size/active.unitsPerEm;
           cell.kind='sideways-tight';saved+=cell.size-cell.advance;
         }
       }
@@ -230,6 +230,7 @@ export function isSideways(char){return !/^[0-9０-９!?！？]+$/u.test(char)&&
 const HORIZONTAL_FEATURES={kern:false,liga:false,clig:false};
 export function glyphRun(font,char,horizontal=false){return font.layout(char,horizontal?HORIZONTAL_FEATURES:['vert','vrt2']);}
 export function glyphPosition(font,cell){
+  font=cell.italic&&font.italicFont?font.italicFont:font;
   const combined=cell.kind==='tcy';
   const sideways=!combined&&cell.kind!=='upright'&&isSideways(cell.char),run=glyphRun(font,cell.char,combined||sideways);
   let fontSize=cell.size;
@@ -256,20 +257,21 @@ export function italicMatrix(cell,font){
 }
 export function pageSvg(page,font,{grid=false,label='誌面プレビュー'}={}){
   const SPEC={width:page.width||768.24,height:page.height||768.24*Math.SQRT2};
+  font=page.font||font;
   const definitions=new Map();const uses=[];
   for(const cell of page.cells){
     const {sideways,run,scale,pad,baseline}=glyphPosition(font,cell);
     let pen=0;const parts=[];
     run.glyphs.forEach((g,i)=>{
-      if(!definitions.has(g.id))definitions.set(g.id,g.path.toSVG());
+      if(!definitions.has(g))definitions.set(g,{id:definitions.size,path:g.path.toSVG()});
       const p=run.positions[i];
-      parts.push(`<use href="#g${g.id}" transform="translate(${cell.x+pad+(pen+p.xOffset)*scale} ${baseline-p.yOffset*scale}) scale(${scale} ${-scale})"/>`);
+      parts.push(`<use href="#g${definitions.get(g).id}" transform="translate(${cell.x+pad+(pen+p.xOffset)*scale} ${baseline-p.yOffset*scale}) scale(${scale} ${-scale})"/>`);
       pen+=p.xAdvance;
     });
     const shapes=sideways?`<g transform="rotate(90 ${cell.x+cell.size/2} ${cell.y+cell.size/2})">${parts.join('')}</g>`:parts.join('');
     uses.push(cell.italic?`<g transform="matrix(${italicMatrix(cell,font).join(' ')})">${shapes}</g>`:shapes);
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SPEC.width} ${SPEC.height}" role="img" aria-label="${xml(label)}"><title>${xml(label)}</title><rect width="100%" height="100%" fill="white"/><defs>${Array.from(definitions,([id,d])=>`<path id="g${id}" d="${xml(d)}"/>`).join('')}</defs><g fill="#111111">${uses.join('')}</g>${(page.images||[]).map(r=>`<image href="${r.data}" x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}"/>`).join('')}${(page.rules||[]).map(r=>`<rect x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" fill="${r.color}"/>`).join('')}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SPEC.width} ${SPEC.height}" role="img" aria-label="${xml(label)}"><title>${xml(label)}</title><rect width="100%" height="100%" fill="white"/><defs>${Array.from(definitions.values(),({id,path:d})=>`<path id="g${id}" d="${xml(d)}"/>`).join('')}</defs><g fill="#111111">${uses.join('')}</g>${(page.images||[]).map(r=>`<image href="${r.data}" x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}"/>`).join('')}${(page.rules||[]).map(r=>`<rect x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" fill="${r.color}"/>`).join('')}</svg>`;
 }
 export function missingCharacters(doc,font){
   return Array.from(new Set(doc.pages.flatMap(p=>p.cells).filter(c=>glyphPosition(font,c).run.glyphs.some(g=>g.id===0)).map(c=>c.source||c.char)));
@@ -281,6 +283,8 @@ export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=
   const verticalFont=hasText?await pdf.embedFont(fontBytes,{subset:false,features:['vert','vrt2']}):null;
   const horizontalFont=hasText?await pdf.embedFont(fontBytes,{subset:false,features:HORIZONTAL_FEATURES}):null;
   pdf.setTitle(doc.title||'身仕度');pdf.setAuthor(doc.author||'');pdf.setCreator('身仕度 組版室 v0.3');pdf.setSubject('月刊身仕度');
+  const embeddedFonts=new Map();
+  async function embedded(active){if(!active?.sourceBytes)return {vertical:verticalFont,horizontal:horizontalFont};const key=active.sourceBytes;if(!embeddedFonts.has(key))embeddedFonts.set(key,{vertical:await pdf.embedFont(key,{subset:false,features:['vert','vrt2']}),horizontal:await pdf.embedFont(key,{subset:false,features:HORIZONTAL_FEATURES})});return embeddedFonts.get(key);}
   const sources=new Map();
   for(const page of doc.pages){
     const SPEC={width:page.width||768.24,height:page.height||768.24*Math.SQRT2};
@@ -302,9 +306,10 @@ export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=
     for(const r of page.images||[]){const img=await (/^data:image\/png[;,]/i.test(r.data)?pdf.embedPng(r.data):pdf.embedJpg(r.data));out.drawImage(img,{x:r.x,y:SPEC.height-r.y-r.height,width:r.width,height:r.height});}
     for(const r of page.rules||[])out.drawRectangle({x:r.x,y:SPEC.height-r.y-r.height,width:r.width,height:r.height,color:rgb(...[1,3,5].map(i=>parseInt(r.color.slice(i,i+2),16)/255))});
     for(const cell of page.cells||[]){
-      const pos=glyphPosition(font,cell);
-      if(cell.italic){const [a,b,c,d,e,f]=italicMatrix(cell,font);out.pushOperators(PDFLib.pushGraphicsState(),PDFLib.concatTransformationMatrix(a,-b,-c,d,c*SPEC.height+e,SPEC.height*(1-d)-f));}
-      out.drawText(cell.char,{font:pos.sideways||pos.combined?horizontalFont:verticalFont,size:pos.fontSize,color:rgb(.067,.067,.067),x:pos.sideways?cell.x+cell.size*.12:cell.x+pos.pad,y:pos.sideways?SPEC.height-cell.y-pos.pad:SPEC.height-pos.baseline,rotate:degrees(pos.sideways?-90:0)});
+      const selected=page.font||font,active=cell.italic&&selected.italicFont?selected.italicFont:selected;
+      const fonts=await embedded(active),pos=glyphPosition(selected,cell);
+      if(cell.italic){const [a,b,c,d,e,f]=italicMatrix(cell,selected);out.pushOperators(PDFLib.pushGraphicsState(),PDFLib.concatTransformationMatrix(a,-b,-c,d,c*SPEC.height+e,SPEC.height*(1-d)-f));}
+      out.drawText(cell.char,{font:pos.sideways||pos.combined?fonts.horizontal:fonts.vertical,size:pos.fontSize,color:rgb(.067,.067,.067),x:pos.sideways?cell.x+cell.size*.12:cell.x+pos.pad,y:pos.sideways?SPEC.height-cell.y-pos.pad:SPEC.height-pos.baseline,rotate:degrees(pos.sideways?-90:0)});
       if(cell.italic)out.pushOperators(PDFLib.popGraphicsState());
     }
     onProgress(page.index+1,doc.pages.length);

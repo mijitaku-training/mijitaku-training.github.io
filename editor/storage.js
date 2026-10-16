@@ -25,6 +25,10 @@ export function validateProject(input){
     if(!i||typeof i!=='object')fail();const id=str(i.id,100);if(seen.has(id))fail();seen.add(id);
     const title=str(i.title,1000);
     const setting=i.pageSettings?{pageSettings:normalizePageSettings(i.pageSettings)}:{};
+    if(i.fontChoice!==undefined){if(!['legacy','mincho','gothic','custom'].includes(i.fontChoice))fail();setting.fontChoice=i.fontChoice;}
+    if(i.italicFont!==undefined){if(!['same','mincho','gothic'].includes(i.italicFont))fail();setting.italicFont=i.italicFont;}
+    if(i.fontData){const data=str(i.fontData.data,28000000);if(!/^[A-Za-z0-9+/]+={0,2}$/.test(data))fail();setting.fontData={name:str(i.fontData.name,500),data};}
+    if(i.fontChoice==='custom'&&!setting.fontData)fail();
     let pdfRatio;
     if(i.pdfRatio){const r=normalizePageSettings(i.pdfRatio);pdfRatio={mode:r.mode,ratioWidth:r.ratioWidth,ratioHeight:r.ratioHeight};}
     if(i.kind==='text'){

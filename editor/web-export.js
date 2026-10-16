@@ -1,4 +1,4 @@
-import {SPEC,glyphPosition,italicMatrix} from './layout.js?v=29';
+import {SPEC,glyphPosition,italicMatrix} from './layout.js?v=30';
 const crcTable=Uint32Array.from({length:256},(_,n)=>{for(let k=0;k<8;k++)n=n&1?0xedb88320^(n>>>1):n>>>1;return n>>>0;});
 function crc32(bytes){let crc=0xffffffff;for(const b of bytes)crc=crcTable[(crc^b)&255]^(crc>>>8);return (crc^0xffffffff)>>>0;}
 export function pageFilename(index){return `p-${String(index+1).padStart(2,'0')}.webp`;}
@@ -17,6 +17,7 @@ export function makeZip(files){
   return new Blob([...local,...central,end],{type:'application/zip'});
 }
 export async function renderWebp(page,font){
+  font=page.font||font;
   const SPEC={width:page.width||768.24,height:page.height||768.24*Math.SQRT2};
   const width=1600,height=Math.round(width*SPEC.height/SPEC.width);
   const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;
