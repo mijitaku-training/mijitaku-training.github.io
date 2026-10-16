@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23192544'/%3E%3Cpath d='M10 7v18M16 7v18M22 7v12' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css?v=21">
   <script src="assets/fontkit.js" defer></script><script src="assets/pdf-lib.js" defer></script>
-  <script type="module" src="app.js?v=28"></script>
+  <script type="module" src="app.js?v=29"></script>
 </head>
 <body>
   <header class="masthead"><div class="brand"><span class="brand-mark" aria-hidden="true">身</span><h1>身仕度 <span>組版室</span></h1></div><span class="version">編集の試作版 <b>0.3</b></span></header>
@@ -48,8 +48,11 @@
           <p>各作品の本文位置は、冊子内の順番に合わせて自動調整します。</p>
           <p>通常の本文：初期設定は縦書き／36字 × 15行／本文22pt／タイトル26pt。作品の1ページ目はタイトルと作者の場所を空けます。</p>
           <p id="font-name">使用フォント：ZENオールド明朝</p>
+          <label class="setting-row" for="font-choice">フォントを選ぶ<select id="font-choice"><option value="mincho">ZENオールド明朝（標準）</option><option value="gothic">ZEN角ゴシック Antique（ゴシック体）</option><option value="custom" disabled>読み込んだフォント</option></select></label>
+          <p>選んだフォントは冊子全体の文字に適用します。読み込んだPDF・画像内の文字は変わりません。</p>
           <label class="file-label">夜永オールド明朝などのフォントを使う<input id="font-file" type="file" accept=".ttf,.otf,.woff"></label>
-          <p>現在の誌面は「夜永オールド明朝」です。同じフォントのTTFを読み込むと切り替わります。</p>
+          <p>標準以外のフォントも、TTFなどのファイルを読み込んで使えます。</p>
+          <a href="assets/zen-kaku-gothic-antique-license.txt" target="_blank" rel="noopener">ZEN角ゴシック Antiqueのライセンス</a>
           <a href="https://booth.pm/ja/items/3489185" target="_blank" rel="noopener">夜永オールド明朝の配布元</a>
         </div></details>
       </form>

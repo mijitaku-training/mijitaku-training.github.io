@@ -1,8 +1,8 @@
 import {DEFAULT_PAGE_SETTINGS,normalizePageSettings,pageGeometry,applyPageSettings} from './page-settings.js?v=21';
 import {saveDraft,readDraft,makeProject,validateProject,bytesToBase64,base64ToBytes} from './storage.js?v=21';
-import {createWebZip} from './web-export.js?v=28';
-import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=28';
-import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=28';
+import {createWebZip} from './web-export.js?v=29';
+import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=29';
+import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=29';
 import {readPdfFile,restorePdfSizes} from './pdf-import.js?v=21';
 const $=id=>document.getElementById(id);
 let font,fontBytes,proof,currentPage=0,busy=false,objectUrl,revision=0,pdfFile,sharing=false,pdfOutput=null;
@@ -102,7 +102,7 @@ function renderEditor(){
 }
 function selectItem(id){saveCurrent();selectedId=id;scheduleDraft();renderEditor();renderList();if(proof){const index=proof.pages.findIndex(p=>p.itemId===id);if(index>=0){currentPage=index;showPage();}}}
 function message(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
-function setBusy(value){busy=value;$('preview-button').disabled=value||!font;$('sample-button').disabled=value;$('export').disabled=value||!proof;$('export-web').disabled=value||!proof;$('font-file').disabled=value;for(const control of document.querySelectorAll('.page-settings input,.page-settings select,.page-settings button'))control.disabled=value||(!value&&$('margin-fields').disabled&&control.id.startsWith('margin-'));for(const id of ['import-project','backup-project','save-draft','clear-project','undo-clear','add-toc','toc-import','toc-add','toc-preview','add-text','add-reader','add-image','add-afterword','replace-image','image-preview','add-pdf','replace-pdf','pdf-preview','pdf-title','pdf-author','pdf-kind'])$(id).disabled=value;renderList();if(selectedItem()?.kind==='toc')renderToc();}
+function setBusy(value){busy=value;$('preview-button').disabled=value||!font;$('sample-button').disabled=value;$('export').disabled=value||!proof;$('export-web').disabled=value||!proof;$('font-file').disabled=value;$("font-choice").disabled=value;for(const control of document.querySelectorAll('.page-settings input,.page-settings select,.page-settings button'))control.disabled=value||(!value&&$('margin-fields').disabled&&control.id.startsWith('margin-'));for(const id of ['import-project','backup-project','save-draft','clear-project','undo-clear','add-toc','toc-import','toc-add','toc-preview','add-text','add-reader','add-image','add-afterword','replace-image','image-preview','add-pdf','replace-pdf','pdf-preview','pdf-title','pdf-author','pdf-kind'])$(id).disabled=value;renderList();if(selectedItem()?.kind==='toc')renderToc();}
 function inputs(){return {preface:$('preface').value,title:$('title').value,author:$('author').value,body:$('body').value,indent:$('indent').checked,startSide:$('start-side').value,combineDigits:$('combine-digits').checked};}
 function updatePrefaceCount(){$('preface-count').textContent=prefaceLength($('preface').value)+' / 150文字';}
 function invalidate(){saveCurrent();scheduleDraft();updatePrefaceCount();revision++;proof=null;pdfFile=null;$('export').disabled=true;$('export-web').disabled=true;$('download-area').hidden=true;$('web-download-area').hidden=true;webFile=null;$('proof-note').textContent='内容を変更しました。「並び順で確認」で更新してください。';$('page-info').textContent='変更は未反映';$('char-count').textContent=graphemes(plainText($('body').value).replace(/\s/g,'')).length.toLocaleString('ja')+'字';renderList();}
@@ -144,7 +144,21 @@ async function loadFont(bytes,name,custom=false){
   if(!candidate.layout||!candidate.unitsPerEm)throw new Error('このフォント形式は使えません。TTFまたはOTFを選んでください。');
   if(!candidate.hasGlyphForCodePoint('あ'.codePointAt(0)))throw new Error('日本語の文字を含むフォントを選んでください。');
   font=candidate;fontBytes=new Uint8Array(bytes);currentFontName=name;customFont=custom?{name,data:bytesToBase64(fontBytes)}:null;$('font-name').textContent=`使用フォント：${name}`;invalidate();
+  syncFontChoice();
 }
+function syncFontChoice(){
+  $('font-choice').value=currentFontName==='ZENオールド明朝'?'mincho':currentFontName==='ZEN角ゴシック Antique'?'gothic':'custom';
+}
+$('font-choice').addEventListener('change',async()=>{
+  const choice=$('font-choice').value;if(busy||choice==='custom'){syncFontChoice();return;}
+  setBusy(true);
+  try{
+    const gothic=choice==='gothic',path=gothic?'ZenKakuGothicAntique-Regular.ttf':'ZenOldMincho-Regular.ttf';
+    const response=await fetch('assets/'+path);if(!response.ok)throw new Error('フォントを読み込めませんでした。');
+    await loadFont(await response.arrayBuffer(),gothic?'ZEN角ゴシック Antique':'ZENオールド明朝',gothic);
+    message('フォントを切り替えました。「縦書きで確認」で誌面を更新してください。');
+  }catch(error){syncFontChoice();message(error.message,true);}finally{setBusy(false);}
+});
 $('manuscript-form').addEventListener('submit',event=>{event.preventDefault();if(!busy)typeset(true);});
 $('image-preview').addEventListener('click',()=>{if(!busy)typeset(true);});
 $('add-text').addEventListener('click',()=>{
@@ -416,6 +430,7 @@ async function restoreProject(data){
     pageSettings=state.pageSettings;closePageSettings();font=candidate;fontBytes=bytes;currentFontName=name;customFont=state.font;items=state.items;selectedId=state.selectedId;
     serial=Math.max(0,...items.map(i=>Number(i.id.match(/^item-(\d+)$/)?.[1]||0)))+1;
     $('start-side').value=state.startSide;$('pdf-name').value=state.pdfName;$('font-name').textContent='使用フォント：'+name;
+    syncFontChoice();
     renderEditor();invalidate();renderList();$('paper-area').replaceChildren();$('proof-note').textContent='下書きを復元しました。「並び順で確認」で誌面を表示できます。';
   }finally{draftReady=wasReady;}
 }
