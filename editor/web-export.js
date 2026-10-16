@@ -1,4 +1,4 @@
-import {SPEC,glyphPosition} from './layout.js?v=26';
+import {SPEC,glyphPosition,italicMatrix} from './layout.js?v=27';
 const crcTable=Uint32Array.from({length:256},(_,n)=>{for(let k=0;k<8;k++)n=n&1?0xedb88320^(n>>>1):n>>>1;return n>>>0;});
 function crc32(bytes){let crc=0xffffffff;for(const b of bytes)crc=crcTable[(crc^b)&255]^(crc>>>8);return (crc^0xffffffff)>>>0;}
 export function pageFilename(index){return `p-${String(index+1).padStart(2,'0')}.webp`;}
@@ -32,6 +32,7 @@ export async function renderWebp(page,font){
       for(const cell of page.cells){
         const {sideways,run,scale,pad,baseline}=glyphPosition(font,cell);
         ctx.save();
+        if(cell.italic)ctx.transform(...italicMatrix(cell,font));
         if(sideways){const x=cell.x+cell.size/2,y=cell.y+cell.size/2;ctx.translate(x,y);ctx.rotate(Math.PI/2);ctx.translate(-x,-y);}
         let pen=0;
         run.glyphs.forEach((glyph,i)=>{const p=run.positions[i];ctx.save();ctx.translate(cell.x+pad+(pen+p.xOffset)*scale,baseline-p.yOffset*scale);ctx.scale(scale,-scale);ctx.fill(new Path2D(glyph.path.toSVG()));ctx.restore();pen+=p.xAdvance;});

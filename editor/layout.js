@@ -11,6 +11,14 @@ export function rubyMatches(text){return Array.from(text.matchAll(/｜([^｜《�
 export function textUnits(text,{combineDigits=true,markup=true}={}){
   const chars=graphemes(text),units=[];
   for(let i=0;i<chars.length;){
+    if(chars[i]==='｛'){
+      const end=chars.indexOf('｝',i+1);
+      if(end<0)throw new Error('斜体の指定が閉じていません。｛文字｝の形で、改行せずに囲んでください。');
+      const body=chars.slice(i+1,end).join('');
+      if(!body||/[｛\n]/u.test(body))throw new Error('斜体には、空でない文字を入れてください。括弧の入れ子や改行は使えません。');
+      units.push(...textUnits(body,{combineDigits,markup}).map(u=>({...u,italic:true})));
+      i=end+1;continue;
+    }
     if(markup&&(chars[i]==='｜'||chars[i]==='《')){
       const wrapped=chars[i]==='《';
       const open=chars.indexOf('《',i+1),close=chars.indexOf('》',i+1);
@@ -93,11 +101,11 @@ export function paginate({title='',author='',body='',indent=true,startSide='odd'
     const odd=(index+(startSide==='even'?1:0))%2===0;
     const right=odd?SPEC.oddRight:SPEC.evenRight;
     const cells=[];
-    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:right-(col+offset)*SPEC.linePitch-SPEC.bodySize/2,y:SPEC.top+row*SPEC.pitch,size:SPEC.bodySize,role:'body'})));
+    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:right-(col+offset)*SPEC.linePitch-SPEC.bodySize/2,y:SPEC.top+row*SPEC.pitch,size:SPEC.bodySize,role:'body'})));
     if(index===0){
-      titleChars.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:right-Math.floor(n/titleRows)*SPEC.linePitch-13,y:SPEC.top+56.693+(n%titleRows)*26,size:26,role:'title'}));
+      titleChars.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:right-Math.floor(n/titleRows)*SPEC.linePitch-13,y:SPEC.top+56.693+(n%titleRows)*26,size:26,role:'title'}));
       const authorX=right-25.8-(authorChars.some(u=>u.ruby)?12:0)-(titleColumns>1?SPEC.linePitch:0);
-      authorChars.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:authorX-11,y:SPEC.bottom-61.321-authorChars.length*22+n*22,size:22,role:'author'}));
+      authorChars.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:authorX-11,y:SPEC.bottom-61.321-authorChars.length*22+n*22,size:22,role:'author'}));
     }
     pages.push({cells,lines:pageLines,offset,index,side:odd?'odd':'even',width:SPEC.width,height:SPEC.height});
   }
@@ -113,14 +121,14 @@ function paginateAfterwordLegacy({title='あとがき',author='',body='',indent=
   const heading=textUnits(title,{combineDigits}),name=textUnits(author,{combineDigits});
   for(let cursor=0;cursor<lines.length;cursor+=8){
     const index=pages.length,cells=[],pageLines=lines.slice(cursor,cursor+8);
-    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-col*38,y:130+row*18.5,size:20,role:'body'})));
-    heading.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:586,y:186+n*24,size:24,role:'title'}));
-    if(cursor+8>=lines.length)name.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-(pageLines.length+1)*38,y:876-name.length*22+n*22,size:22,role:'author'}));
+    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-col*38,y:130+row*18.5,size:20,role:'body'})));
+    heading.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:586,y:186+n*24,size:24,role:'title'}));
+    if(cursor+8>=lines.length)name.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-(pageLines.length+1)*38,y:876-name.length*22+n*22,size:22,role:'author'}));
     pages.push({cells,lines:pageLines,index,side:(index+(startSide==='even'?1:0))%2?'even':'odd',layout:'afterword'});
   }
   return {title,author,body:normalizeBody(body),indent,startSide,combineDigits,pages:withRuby(pages,font)};
 }
-export function plainText(text){let result=normalizeBody(text);for(const m of rubyMatches(result).reverse())result=result.slice(0,m.index)+m[1]+result.slice(m.index+m[0].length);return result.replace(/\[\[([^\n]*?)\]\]/g,'$1');}
+export function plainText(text){let result=normalizeBody(text);for(const m of rubyMatches(result).reverse())result=result.slice(0,m.index)+m[1]+result.slice(m.index+m[0].length);return result.replace(/\[\[([^\n]*?)\]\]/g,'$1').replace(/｛([^｛｝\n]+)｝/g,'$1');}
 export function prefaceLength(text){return graphemes(plainText(text).replace(/\n/g,'')).length;}
 // Ruby uses ordinary positioned cells, so preview, PDF and WebP share one layout.
 function withRuby(pages,font){
@@ -172,7 +180,7 @@ function paginateReaderLegacy({title='',author='',body='',preface='',indent=true
   const intro=breakLines(preface,false,combineDigits,32);
   if(intro.length>5)throw new Error('前書きの改行・空行を減らして、5行以内に収めてください。');
   const lines=breakLines(body,indent,combineDigits),pages=[];
-  const add=(cells,unit,x,y,size,role)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x,y,size,role});
+  const add=(cells,unit,x,y,size,role)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x,y,size,role});
   for(let cursor=0;cursor<lines.length;){
     const index=pages.length,first=index===0,odd=(index+(startSide==='even'?1:0))%2===0;
     const pageLines=lines.slice(cursor,cursor+(first?7:SPEC.columns));cursor+=pageLines.length;
@@ -200,7 +208,7 @@ function paginateTocLegacy({entries=[],font}){
   if(!rows.length)throw new Error('目次に作品タイトルを入力してください。');
   if(rows.length>10)throw new Error('目次は、あとがきを含めて10項目までです。');
   const cells=[],top=235,bottom=824,pitch=Math.min(48,480/Math.max(1,rows.length-1));
-  const add=(u,x,y,size,role)=>cells.push({char:u.display,source:u.text,kind:u.kind,ruby:u.ruby,rubyIndex:u.rubyIndex,x,y,size,role});
+  const add=(u,x,y,size,role)=>cells.push({char:u.display,source:u.text,kind:u.kind,italic:u.italic,ruby:u.ruby,rubyIndex:u.rubyIndex,x,y,size,role});
   textUnits('目次').forEach((u,n)=>add(u,654,264+n*26,26,'toc-heading'));
   rows.forEach((entry,index)=>{
     if(!entry.title?.trim())throw new Error(`目次の${index+1}番目にタイトルを入力してください。`);
@@ -239,6 +247,11 @@ export function glyphPosition(font,cell){
   return {sideways,combined,run,scale,pad,baseline,fontSize};
 }
 const xml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
+// Shared screen-coordinate shear for SVG, WebP, and PDF (12 degrees).
+export function italicMatrix(cell,font){
+  const pos=glyphPosition(font,cell),k=Math.tan(Math.PI/15);
+  return pos.sideways?[1,k,0,1,0,-k*(cell.x+cell.size*.12)]:[1,0,-k,1,k*pos.baseline,0];
+}
 export function pageSvg(page,font,{grid=false,label='誌面プレビュー'}={}){
   const SPEC={width:page.width||768.24,height:page.height||768.24*Math.SQRT2};
   const definitions=new Map();const uses=[];
@@ -251,7 +264,8 @@ export function pageSvg(page,font,{grid=false,label='誌面プレビュー'}={})
       parts.push(`<use href="#g${g.id}" transform="translate(${cell.x+pad+(pen+p.xOffset)*scale} ${baseline-p.yOffset*scale}) scale(${scale} ${-scale})"/>`);
       pen+=p.xAdvance;
     });
-    uses.push(sideways?`<g transform="rotate(90 ${cell.x+cell.size/2} ${cell.y+cell.size/2})">${parts.join('')}</g>`:parts.join(''));
+    const shapes=sideways?`<g transform="rotate(90 ${cell.x+cell.size/2} ${cell.y+cell.size/2})">${parts.join('')}</g>`:parts.join('');
+    uses.push(cell.italic?`<g transform="matrix(${italicMatrix(cell,font).join(' ')})">${shapes}</g>`:shapes);
   }
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SPEC.width} ${SPEC.height}" role="img" aria-label="${xml(label)}"><title>${xml(label)}</title><rect width="100%" height="100%" fill="white"/><defs>${Array.from(definitions,([id,d])=>`<path id="g${id}" d="${xml(d)}"/>`).join('')}</defs><g fill="#111111">${uses.join('')}</g>${(page.images||[]).map(r=>`<image href="${r.data}" x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}"/>`).join('')}${(page.rules||[]).map(r=>`<rect x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" fill="${r.color}"/>`).join('')}</svg>`;
 }
@@ -287,7 +301,9 @@ export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=
     for(const r of page.rules||[])out.drawRectangle({x:r.x,y:SPEC.height-r.y-r.height,width:r.width,height:r.height,color:rgb(...[1,3,5].map(i=>parseInt(r.color.slice(i,i+2),16)/255))});
     for(const cell of page.cells||[]){
       const pos=glyphPosition(font,cell);
+      if(cell.italic){const [a,b,c,d,e,f]=italicMatrix(cell,font);out.pushOperators(PDFLib.pushGraphicsState(),PDFLib.concatTransformationMatrix(a,-b,-c,d,c*SPEC.height+e,SPEC.height*(1-d)-f));}
       out.drawText(cell.char,{font:pos.sideways||pos.combined?horizontalFont:verticalFont,size:pos.fontSize,color:rgb(.067,.067,.067),x:pos.sideways?cell.x+cell.size*.12:cell.x+pos.pad,y:pos.sideways?SPEC.height-cell.y-pos.pad:SPEC.height-pos.baseline,rotate:degrees(pos.sideways?-90:0)});
+      if(cell.italic)out.pushOperators(PDFLib.popGraphicsState());
     }
     onProgress(page.index+1,doc.pages.length);
     await new Promise(resolve=>setTimeout(resolve,0));
