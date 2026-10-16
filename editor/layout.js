@@ -247,10 +247,12 @@ export function glyphPosition(font,cell){
   return {sideways,combined,run,scale,pad,baseline,fontSize};
 }
 const xml=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c]));
-// Shared screen-coordinate shear for SVG, WebP, and PDF (12 degrees).
+// Vertical Japanese oblique: the right side rises (screen y decreases).
+// Anchor at the cell centre so the baseline/column position does not drift.
+// Share the same page-coordinate transform across SVG, WebP and PDF.
 export function italicMatrix(cell,font){
-  const pos=glyphPosition(font,cell),k=Math.tan(Math.PI/15);
-  return pos.sideways?[1,k,0,1,0,-k*(cell.x+cell.size*.12)]:[1,0,-k,1,k*pos.baseline,0];
+  const k=Math.tan(Math.PI/15),cx=cell.x+cell.size/2;
+  return [1,-k,0,1,0,k*cx];
 }
 export function pageSvg(page,font,{grid=false,label='誌面プレビュー'}={}){
   const SPEC={width:page.width||768.24,height:page.height||768.24*Math.SQRT2};
