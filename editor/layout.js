@@ -229,7 +229,11 @@ function paginateTocLegacy({entries=[],font}){
 }
 export function isSideways(char){return !/^[0-9０-９!?！？]+$/u.test(char)&&/^[\u0021-\u007e\u00a1-\u024f]/u.test(char);}
 const HORIZONTAL_FEATURES={kern:false,liga:false,clig:false};
-export function glyphRun(font,char,horizontal=false){return font.layout(char,horizontal?HORIZONTAL_FEATURES:['vert','vrt2']);}
+export function fontText(font,text){
+  // Preserve source text; use the font's em dash only if horizontal bar is absent.
+  return text.includes('―')&&!font.hasGlyphForCodePoint(0x2015)&&font.hasGlyphForCodePoint(0x2014)?text.replaceAll('―','—'):text;
+}
+export function glyphRun(font,char,horizontal=false){return font.layout(fontText(font,char),horizontal?HORIZONTAL_FEATURES:['vert','vrt2']);}
 export function glyphPosition(font,cell){
   font=cell.italic&&font.italicFont?font.italicFont:font;
   const combined=cell.kind==='tcy';
@@ -310,7 +314,7 @@ export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=
       const selected=page.font||font,active=cell.italic&&selected.italicFont?selected.italicFont:selected;
       const fonts=await embedded(active),pos=glyphPosition(selected,cell);
       if(cell.italic){const [a,b,c,d,e,f]=italicMatrix(cell,selected);out.pushOperators(PDFLib.pushGraphicsState(),PDFLib.concatTransformationMatrix(a,-b,-c,d,c*SPEC.height+e,SPEC.height*(1-d)-f));}
-      out.drawText(cell.char,{font:pos.sideways||pos.combined?fonts.horizontal:fonts.vertical,size:pos.fontSize,color:rgb(.067,.067,.067),x:pos.sideways?cell.x+cell.size*.12:cell.x+pos.pad,y:pos.sideways?SPEC.height-cell.y-pos.pad:SPEC.height-pos.baseline,rotate:degrees(pos.sideways?-90:0)});
+      out.drawText(fontText(active,cell.char),{font:pos.sideways||pos.combined?fonts.horizontal:fonts.vertical,size:pos.fontSize,color:rgb(.067,.067,.067),x:pos.sideways?cell.x+cell.size*.12:cell.x+pos.pad,y:pos.sideways?SPEC.height-cell.y-pos.pad:SPEC.height-pos.baseline,rotate:degrees(pos.sideways?-90:0)});
       if(cell.italic)out.pushOperators(PDFLib.popGraphicsState());
     }
     onProgress(page.index+1,doc.pages.length);
