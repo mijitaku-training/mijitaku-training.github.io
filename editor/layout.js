@@ -11,11 +11,11 @@ export function rubyMatches(text){return Array.from(text.matchAll(/｜([^｜《�
 export function textUnits(text,{combineDigits=true,markup=true}={}){
   const chars=graphemes(text),units=[];
   for(let i=0;i<chars.length;){
-    if(chars[i]==='｛'){
-      const end=chars.indexOf('｝',i+1);
-      if(end<0)throw new Error('斜体の指定が閉じていません。｛文字｝の形で、改行せずに囲んでください。');
+    if(chars[i]==='｛'||chars[i]==='{'){
+      const end=chars.indexOf(chars[i]==='{'?'}':'｝',i+1);
+      if(end<0)throw new Error('斜体の指定が閉じていません。{文字} の形で、同じ幅の括弧を使い、改行せずに囲んでください。');
       const body=chars.slice(i+1,end).join('');
-      if(!body||/[｛\n]/u.test(body))throw new Error('斜体には、空でない文字を入れてください。括弧の入れ子や改行は使えません。');
+      if(!body||/[｛｝{}\n]/u.test(body))throw new Error('斜体には、空でない文字を入れてください。括弧の入れ子や改行は使えません。');
       units.push(...textUnits(body,{combineDigits,markup}).map(u=>({...u,italic:true})));
       i=end+1;continue;
     }
@@ -129,7 +129,7 @@ function paginateAfterwordLegacy({title='あとがき',author='',body='',indent=
   }
   return {title,author,body:normalizeBody(body),indent,startSide,combineDigits,pages:withRuby(pages,font)};
 }
-export function plainText(text){let result=normalizeBody(text);for(const m of rubyMatches(result).reverse())result=result.slice(0,m.index)+m[1]+result.slice(m.index+m[0].length);return result.replace(/\[\[([^\n]*?)\]\]/g,'$1').replace(/｛([^｛｝\n]+)｝/g,'$1');}
+export function plainText(text){let result=normalizeBody(text);for(const m of rubyMatches(result).reverse())result=result.slice(0,m.index)+m[1]+result.slice(m.index+m[0].length);return result.replace(/\[\[([^\n]*?)\]\]/g,'$1').replace(/｛([^｛｝{}\n]+)｝|\{([^｛｝{}\n]+)\}/g,(_,wide,half)=>wide??half);}
 export function prefaceLength(text){return graphemes(plainText(text).replace(/\n/g,'')).length;}
 // Ruby uses ordinary positioned cells, so preview, PDF and WebP share one layout.
 function withRuby(pages,font){
