@@ -1,5 +1,5 @@
 import {pageGeometry} from './page-settings.js?v=21';
-import {SPEC,paginate,paginateAfterword,paginateReader,paginateToc,missingCharacters} from './layout.js?v=34';
+import {SPEC,paginate,paginateAfterword,paginateReader,paginateToc,missingCharacters} from './layout.js?v=36';
 
 export function imagePlacement(width,height,fit='contain',SPEC=pageGeometry()){
   if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)throw new Error('画像の大きさを読み取れませんでした。');
@@ -45,9 +45,10 @@ export function moveItem(items,id,direction){
   if(index<0||next<0||next>=result.length)return result;
   [result[index],result[next]]=[result[next],result[index]];return result;
 }
+let imageSvgSerial=0;
 export function imageSvg(page){
-  const r=page.placement,SPEC=page,c=page.clip;
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SPEC.width} ${SPEC.height}" role="img" aria-label="画像ページのプレビュー"><rect width="100%" height="100%" fill="white"/><defs><clipPath id="frame"><rect x="${c?.x||0}" y="${c?.y||0}" width="${c?.width||SPEC.width}" height="${c?.height||SPEC.height}"/></clipPath></defs><image clip-path="url(#frame)" href="${page.image.data}" x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" preserveAspectRatio="none"/></svg>`;
+  const r=page.placement,SPEC=page,c=page.clip,frameId=`mijitaku-image-${++imageSvgSerial}-frame`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SPEC.width} ${SPEC.height}" role="img" aria-label="画像ページのプレビュー"><rect width="100%" height="100%" fill="white"/><defs><clipPath id="${frameId}"><rect x="${c?.x||0}" y="${c?.y||0}" width="${c?.width||SPEC.width}" height="${c?.height||SPEC.height}"/></clipPath></defs><image clip-path="url(#${frameId})" href="${page.image.data}" x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" preserveAspectRatio="none"/></svg>`;
 }
 export async function readImageFile(file){
   if(file.size>25*1024*1024)throw new Error('画像は1枚25MB以下にしてください。');

@@ -260,23 +260,26 @@ export function italicMatrix(cell,font){
   const k=Math.tan(Math.PI/15),cx=cell.x+cell.size/2;
   return [1,-k,0,1,0,k*cx];
 }
+let pageSvgSerial=0;
 export function pageSvg(page,font,{grid=false,label='誌面プレビュー'}={}){
   const SPEC={width:page.width||768.24,height:page.height||768.24*Math.SQRT2};
   font=page.font||font;
+  // Inline SVG IDs are document-wide. Each rendered page needs its own namespace.
+  const glyphPrefix=`mijitaku-text-${++pageSvgSerial}-g`;
   const definitions=new Map();const uses=[];
   for(const cell of page.cells){
     const {sideways,run,scale,pad,baseline}=glyphPosition(font,cell);
     let pen=0;const parts=[];
     run.glyphs.forEach((g,i)=>{
-      if(!definitions.has(g))definitions.set(g,{id:definitions.size,path:g.path.toSVG()});
+      if(!definitions.has(g))definitions.set(g,{id:glyphPrefix+definitions.size,path:g.path.toSVG()});
       const p=run.positions[i];
-      parts.push(`<use href="#g${definitions.get(g).id}" transform="translate(${cell.x+pad+(pen+p.xOffset)*scale} ${baseline-p.yOffset*scale}) scale(${scale} ${-scale})"/>`);
+      parts.push(`<use href="#${definitions.get(g).id}" transform="translate(${cell.x+pad+(pen+p.xOffset)*scale} ${baseline-p.yOffset*scale}) scale(${scale} ${-scale})"/>`);
       pen+=p.xAdvance;
     });
     const shapes=sideways?`<g transform="rotate(90 ${cell.x+cell.size/2} ${cell.y+cell.size/2})">${parts.join('')}</g>`:parts.join('');
     uses.push(cell.italic?`<g transform="matrix(${italicMatrix(cell,font).join(' ')})">${shapes}</g>`:shapes);
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SPEC.width} ${SPEC.height}" role="img" aria-label="${xml(label)}"><title>${xml(label)}</title><rect width="100%" height="100%" fill="white"/><defs>${Array.from(definitions.values(),({id,path:d})=>`<path id="g${id}" d="${xml(d)}"/>`).join('')}</defs><g fill="#111111">${uses.join('')}</g>${(page.images||[]).map(r=>`<image href="${r.data}" x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}"/>`).join('')}${(page.rules||[]).map(r=>`<rect x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" fill="${r.color}"/>`).join('')}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SPEC.width} ${SPEC.height}" role="img" aria-label="${xml(label)}"><title>${xml(label)}</title><rect width="100%" height="100%" fill="white"/><defs>${Array.from(definitions.values(),({id,path:d})=>`<path id="${id}" d="${xml(d)}"/>`).join('')}</defs><g fill="#111111">${uses.join('')}</g>${(page.images||[]).map(r=>`<image href="${r.data}" x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}"/>`).join('')}${(page.rules||[]).map(r=>`<rect x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" fill="${r.color}"/>`).join('')}</svg>`;
 }
 export function missingCharacters(doc,font){
   return Array.from(new Set(doc.pages.flatMap(p=>p.cells).filter(c=>glyphPosition(font,c).run.glyphs.some(g=>g.id===0)).map(c=>c.source||c.char)));
