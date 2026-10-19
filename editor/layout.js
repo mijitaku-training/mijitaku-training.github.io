@@ -230,7 +230,8 @@ function paginateTocLegacy({entries=[],font}){
 export function isSideways(char){return !/^[0-9０-９!?！？]+$/u.test(char)&&/^[\u0021-\u007e\u00a1-\u024f]/u.test(char);}
 const HORIZONTAL_FEATURES={kern:false,liga:false,clig:false};
 export function fontText(font,text){
-  // Preserve source text; use the font's em dash only if horizontal bar is absent.
+  // Preserve source text. Substitute only missing glyphs at render/export time.
+  if(text.includes('－')&&!font.hasGlyphForCodePoint(0xff0d)&&font.hasGlyphForCodePoint(0x2010))text=text.replaceAll('－','‐');
   return text.includes('―')&&!font.hasGlyphForCodePoint(0x2015)&&font.hasGlyphForCodePoint(0x2014)?text.replaceAll('―','—'):text;
 }
 export function glyphRun(font,char,horizontal=false){return font.layout(fontText(font,char),horizontal?HORIZONTAL_FEATURES:['vert','vrt2']);}
