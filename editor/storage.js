@@ -13,6 +13,22 @@ function openDb(){
 }
 export async function saveDraft(data){const db=await openDb();await new Promise((resolve,reject)=>{const tx=db.transaction('drafts','readwrite');tx.objectStore('drafts').put(data,'current');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('保存が中断されました。'));});}
 export async function readDraft(){const db=await openDb();return new Promise((resolve,reject)=>{const req=db.transaction('drafts').objectStore('drafts').get('current');req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);});}
+async function readRecord(key){const db=await openDb();return new Promise((resolve,reject)=>{const req=db.transaction('drafts').objectStore('drafts').get(key);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);});}
+export const readRecovery=()=>readRecord('before-restore');
+export const readBackupAction=()=>readRecord('backup-action');
+export async function saveBackupAction(value){const db=await openDb();await new Promise((resolve,reject)=>{const tx=db.transaction('drafts','readwrite');tx.objectStore('drafts').put(value,'backup-action');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('保存が中断されました。'));});}
+// Both records commit together. On quota/transaction failure, neither is changed.
+export async function commitRestoration(next,previous){
+  const db=await openDb();await new Promise((resolve,reject)=>{
+    const tx=db.transaction('drafts','readwrite'),store=tx.objectStore('drafts');
+    tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('復元前の退避に失敗しました。'));
+    try{store.put(previous,'before-restore');store.put(next,'current');}catch(error){tx.abort();reject(error);}
+  });
+}
+export function backupFilename(base,date=new Date()){
+  const pad=(n,w=2)=>String(n).padStart(w,'0');
+  return `${base}_バックアップ_${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}_${pad(date.getHours())}-${pad(date.getMinutes())}-${pad(date.getSeconds())}-${pad(date.getMilliseconds(),3)}.json`;
+}
 export function bytesToBase64(bytes){let s='';for(let i=0;i<bytes.length;i+=32768)s+=String.fromCharCode(...bytes.subarray(i,i+32768));return btoa(s);}
 export function base64ToBytes(value){return Uint8Array.from(atob(value),c=>c.charCodeAt(0));}
 export function makeProject(state){return {format:FORMAT,version:VERSION,savedAt:new Date().toISOString(),...state};}

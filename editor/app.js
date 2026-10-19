@@ -1,5 +1,5 @@
 import {DEFAULT_PAGE_SETTINGS,normalizePageSettings,pageGeometry,applyPageSettings} from './page-settings.js?v=21';
-import {saveDraft,readDraft,makeProject,validateProject,bytesToBase64,base64ToBytes} from './storage.js?v=34';
+import {saveDraft,readDraft,readRecovery,readBackupAction,saveBackupAction,commitRestoration,backupFilename,makeProject,validateProject,bytesToBase64,base64ToBytes} from './storage.js?v=35';
 import {createWebZip} from './web-export.js?v=34';
 import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=34';
 import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=34';
@@ -8,6 +8,7 @@ const $=id=>document.getElementById(id);
 let font,fontBytes,proof,currentPage=0,busy=false,objectUrl,revision=0,pdfFile,sharing=false,pdfOutput=null;
 let webFile=null,webUrl=null;
 let clearedProject=null;
+let recoveryProject=null,backupSnapshotAt=null;
 let previewMode='single',proofStartSide='odd';
 let draftReady=false,draftDirty=false,draftTimer=null,draftChain=Promise.resolve(),draftVersion=0,customFont=null,currentFontName='ZENオールド明朝',backupFile=null,backupUrl=null;
 let pageSettings={...DEFAULT_PAGE_SETTINGS},settingsDraft=null,settingsItemId=null;
@@ -103,7 +104,7 @@ function renderEditor(){
 }
 function selectItem(id){saveCurrent();selectedId=id;scheduleDraft();renderEditor();renderList();if(proof){const index=proof.pages.findIndex(p=>p.itemId===id);if(index>=0){currentPage=index;showPage();}}}
 function message(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
-function setBusy(value){busy=value;$('preview-button').disabled=value||!font;$('sample-button').disabled=value;$('export').disabled=value||!proof;$('export-web').disabled=value||!proof;$('font-file').disabled=value;$("font-choice").disabled=value;$("italic-font-choice").disabled=value;for(const control of document.querySelectorAll('.page-settings input,.page-settings select,.page-settings button'))control.disabled=value||(!value&&$('margin-fields').disabled&&control.id.startsWith('margin-'));for(const id of ['import-project','backup-project','save-draft','clear-project','undo-clear','add-blank','blank-preview','add-toc','toc-import','toc-add','toc-preview','add-text','add-reader','add-image','add-afterword','replace-image','image-preview','add-pdf','replace-pdf','pdf-preview','pdf-title','pdf-author','pdf-kind'])$(id).disabled=value;renderList();if(selectedItem()?.kind==='toc')renderToc();}
+function setBusy(value){busy=value;$('undo-import').disabled=value;$('preview-button').disabled=value||!font;$('sample-button').disabled=value;$('export').disabled=value||!proof;$('export-web').disabled=value||!proof;$('font-file').disabled=value;$("font-choice").disabled=value;$("italic-font-choice").disabled=value;for(const control of document.querySelectorAll('.page-settings input,.page-settings select,.page-settings button'))control.disabled=value||(!value&&$('margin-fields').disabled&&control.id.startsWith('margin-'));for(const id of ['import-project','backup-project','save-draft','clear-project','undo-clear','add-blank','blank-preview','add-toc','toc-import','toc-add','toc-preview','add-text','add-reader','add-image','add-afterword','replace-image','image-preview','add-pdf','replace-pdf','pdf-preview','pdf-title','pdf-author','pdf-kind'])$(id).disabled=value;renderList();if(selectedItem()?.kind==='toc')renderToc();}
 function inputs(){return {preface:$('preface').value,title:$('title').value,author:$('author').value,body:$('body').value,indent:$('indent').checked,startSide:$('start-side').value,combineDigits:$('combine-digits').checked};}
 function updatePrefaceCount(){$('preface-count').textContent=prefaceLength($('preface').value)+' / 150文字';}
 function invalidate(){saveCurrent();scheduleDraft();updatePrefaceCount();revision++;proof=null;pdfFile=null;$('export').disabled=true;$('export-web').disabled=true;$('download-area').hidden=true;$('web-download-area').hidden=true;webFile=null;$('proof-note').textContent='内容を変更しました。「並び順で確認」で更新してください。';$('page-info').textContent='変更は未反映';$('char-count').textContent=graphemes(plainText($('body').value).replace(/\s/g,'')).length.toLocaleString('ja')+'字';renderList();}
@@ -447,15 +448,16 @@ function flushDraft(){
   const version=draftVersion,data=structuredClone(projectSnapshot());
   draftChain=draftChain.catch(()=>{}).then(()=>saveDraft(data)).then(()=>{
     if(version===draftVersion){draftDirty=false;$('draft-status').textContent='下書き保存済み · '+new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit'});}
-  }).catch(()=>{$('draft-status').textContent='下書きを保存できません。編集データを書き出して保存してください。';});return draftChain;
+  }).catch(()=>{$('draft-status').textContent='下書きを保存できません。「バックアップを保存」からファイルを保存してください。';});return draftChain;
 }
-async function restoreProject(data){
+async function restoreProject(data,beforeApply){
   const state=validateProject(data);await restorePdfSizes(state.items,window.PDFLib);let bytes,name;
   if(state.font){bytes=base64ToBytes(state.font.data);name=state.font.name;}
   else{const r=await fetch('assets/ZenOldMincho-Regular.ttf');if(!r.ok)throw new Error('フォントを読み込めませんでした。');bytes=new Uint8Array(await r.arrayBuffer());name='ZENオールド明朝';}
   const candidate=window.fontkit.create(bytes);if(!candidate.layout||!candidate.hasGlyphForCodePoint('あ'.codePointAt(0)))throw new Error('編集データのフォントを読み込めませんでした。');
   candidate.sourceBytes=bytes;
   for(const item of state.items){if(item.fontChoice&&item.fontChoice!=='legacy')await prepareFont(item.fontChoice,item.fontData);if(item.italicFont&&item.italicFont!=='same')await prepareFont(item.italicFont);}
+  if(beforeApply)await beforeApply(state);
   const wasReady=draftReady;draftReady=false;
   try{
     pageSettings=state.pageSettings;closePageSettings();font=candidate;fontBytes=bytes;currentFontName=name;customFont=state.font;items=state.items;selectedId=state.selectedId;
@@ -468,7 +470,7 @@ async function restoreProject(data){
 $('save-draft').addEventListener('click',()=>{scheduleDraft();flushDraft();});
 function clearGeneratedFiles(){
   for(const url of [objectUrl,webUrl,backupUrl])if(url)URL.revokeObjectURL(url);
-  objectUrl=webUrl=backupUrl=null;pdfFile=pdfOutput=webFile=backupFile=null;
+  objectUrl=webUrl=backupUrl=null;pdfFile=pdfOutput=webFile=backupFile=null;backupSnapshotAt=null;
   for(const id of ['download-area','web-download-area','backup-area'])$(id).hidden=true;
   for(const id of ['download-link','save-link','save-web','download-backup']){$(id).removeAttribute('href');$(id).removeAttribute('download');}
   for(const id of ['pdf-file-info','web-file-info','backup-info'])$(id).textContent='';
@@ -483,7 +485,7 @@ function resetProofDisplay(){
 }
 async function clearProject(){
   if(busy||sharing)return;
-  if(!window.confirm('制作データをクリアして、新しい号を作りますか？\n\n原稿・画像・PDF・目次・並び順・ファイル名と、この端末の下書きを空にします。フォントは引き継ぎます。\n\n必要な内容は、先に「編集データを書き出す」でダウンロード保存してください。保存済みのPDF・ZIP・編集データのファイルは消えません。\n\nこのページを閉じる・再読み込みするまでは、直前のクリアを元に戻せます。'))return;
+  if(!window.confirm('制作データをクリアして、新しい号を作りますか？\n\n原稿・画像・PDF・目次・並び順・ファイル名と、この端末の下書きを空にします。フォントは引き継ぎます。\n\n必要な内容は、先に「バックアップを保存」でダウンロード保存してください。保存済みのPDF・ZIP・編集データのファイルは消えません。\n\nこのページを閉じる・再読み込みするまでは、直前のクリアを元に戻せます。'))return;
   const previous=structuredClone(projectSnapshot()),wasReady=draftReady;
   const blank={id:'item-1',kind:'text',title:'',author:'',body:'',indent:true,combineDigits:true};
   const fresh=makeProject({items:[blank],selectedId:blank.id,startSide:'odd',pdfName:'',font:customFont});
@@ -510,39 +512,76 @@ async function undoClear(){
   try{
     await flushDraft();await restoreProject(clearedProject);resetProofDisplay();draftReady=true;scheduleDraft();await flushDraft();
     if(!draftDirty){clearedProject=null;$('undo-clear').hidden=$('undo-clear-help').hidden=true;message('クリア前の制作データを戻しました。「並び順で確認」で誌面を表示できます。');}
-    else message('制作データは画面に戻しましたが、下書きを保存できません。編集データを書き出して保存してください。',true);
+    else message('制作データは画面に戻しましたが、下書きを保存できません。「バックアップを保存」からファイルを保存してください。',true);
   }catch(error){message('元に戻せませんでした。'+error.message,true);}
   finally{document.querySelector('main').inert=false;setBusy(false);}
 }
 $('clear-project').addEventListener('click',clearProject);
 $('undo-clear').addEventListener('click',undoClear);
 $('backup-project').addEventListener('click',()=>{
-  if(busy)return;
+  if(busy||sharing)return;
   try{
-    const data=projectSnapshot(),blob=new Blob([JSON.stringify(data)],{type:'application/json'}),name=pdfName('身仕度').replace(/\.pdf$/i,'_編集データ.json');
+    const data=projectSnapshot();validateProject(data);
+    const blob=new Blob([JSON.stringify(data)],{type:'application/json'}),name=backupFilename(pdfName('身仕度').replace(/\.pdf$/i,''));
+    if(blob.size>250*1024*1024)throw new Error('復元できる容量は250MBまでです。取り込んだPDF・画像を軽くしてから保存してください。');
+    backupSnapshotAt=data.savedAt;
     backupFile=typeof File==='function'?new File([blob],name,{type:'application/json'}):null;
     if(backupUrl)URL.revokeObjectURL(backupUrl);backupUrl=URL.createObjectURL(blob);$('download-backup').href=backupUrl;$('download-backup').download=name;
     let canShare=false;try{canShare=!!(backupFile&&navigator.share&&navigator.canShare?.({files:[backupFile]}));}catch{}
-    $('share-backup').hidden=!canShare;$('backup-info').textContent=name+' · 原稿・画像・並び順・設定'+(customFont?'・読み込んだフォント':'');$('backup-area').hidden=false;
-    message('編集データを作りました。下の共有またはダウンロードから保存してください。');
-  }catch(error){message('編集データを作れませんでした。'+error.message,true);}
+    $('share-backup').hidden=!canShare;$('backup-info').textContent=name+' · '+(blob.size/1024/1024).toFixed(1)+'MB · '+data.items.length+'項目';$('backup-area').hidden=false;
+    message('バックアップを用意しました。下の共有またはダウンロードから、ファイルの保存を完了してください。');
+  }catch(error){message('バックアップを作れませんでした。'+error.message,true);}
 });
+function displayBackupAction(record){
+  if(!record||!Number.isFinite(Date.parse(record.at)))return;
+  const snapshot=Number.isFinite(Date.parse(record.snapshotAt))?'（内容：'+new Date(record.snapshotAt).toLocaleString('ja-JP')+'時点）':'';
+  $('backup-status').textContent='最後の書き出し操作：'+new Date(record.at).toLocaleString('ja-JP')+snapshot+'。保存の完了は、保存先でファイルを確認してください。';
+}
+async function recordBackupAction(snapshotAt){
+  const record={at:new Date().toISOString(),snapshotAt};displayBackupAction(record);
+  try{await saveBackupAction(record);}catch{$('backup-status').textContent+=' この操作時刻を端末に記録できませんでした。';}
+}
+$('download-backup').addEventListener('click',()=>{if(backupUrl&&backupSnapshotAt)void recordBackupAction(backupSnapshotAt);});
 $('share-backup').addEventListener('click',async()=>{
   if(!backupFile||sharing)return;sharing=true;$('share-backup').disabled=true;
-  try{await navigator.share({files:[backupFile]});message('共有画面を閉じました。保存先で編集データを確認してください。');}
-  catch(error){message(error.name==='AbortError'?'保存をキャンセルしました。':'共有できませんでした。編集データをダウンロードして保存してください。',error.name!=='AbortError');}
+  const snapshotAt=backupSnapshotAt;
+  try{await navigator.share({files:[backupFile]});await recordBackupAction(snapshotAt);message('共有画面を閉じました。保存先でバックアップファイルを確認してください。');}
+  catch(error){message(error.name==='AbortError'?'保存をキャンセルしました。':'共有できませんでした。バックアップをダウンロードして保存してください。',error.name!=='AbortError');}
   finally{sharing=false;$('share-backup').disabled=false;}
 });
-$('import-project').addEventListener('click',()=>{if(!busy){$('project-file').value='';$('project-file').click();}});
+$('import-project').addEventListener('click',()=>{if(!busy&&!sharing){$('project-file').value='';$('project-file').click();}});
+function displayRecovery(){
+  $('recovery-area').hidden=!recoveryProject;
+  if(recoveryProject){const at=Date.parse(recoveryProject.savedAt);$('recovery-info').textContent='直前の復元前：'+(Number.isFinite(at)?new Date(at).toLocaleString('ja-JP')+' · ':'')+recoveryProject.items.length+'項目。再読み込み後も戻せます。退避は最新1件で、次の復元時に更新されます。';}
+}
+async function restoreBackup(data){
+  const previous=structuredClone(projectSnapshot()),wasReady=draftReady;
+  // Freeze editing, drain older writes, and persist both states before changing the screen.
+  clearTimeout(draftTimer);draftReady=false;
+  try{await draftChain.catch(()=>{});await restoreProject(data,async state=>{await commitRestoration(state,previous);recoveryProject=previous;});}
+  catch(error){draftReady=wasReady;throw error;}
+  draftVersion++;draftDirty=false;draftReady=true;resetProofDisplay();displayRecovery();
+  clearedProject=null;$('undo-clear').hidden=$('undo-clear-help').hidden=true;
+  $('draft-status').textContent='バックアップから復元し、この端末の下書きにも保存しました。';
+  message('復元しました。「並び順で確認」で誌面を確認してください。間違えた場合は「復元前の状態に戻す」を押してください。');
+}
+$('undo-import').addEventListener('click',async()=>{
+  if(busy||sharing||!recoveryProject)return;
+  if(!window.confirm('直前の復元前の状態に戻しますか？現在の内容も退避するので、再び切り替えられます。'))return;
+  setBusy(true);document.querySelector('main').inert=true;
+  try{await restoreBackup(recoveryProject);}catch(error){message('戻せませんでした。'+error.message,true);}
+  finally{document.querySelector('main').inert=false;setBusy(false);if(draftDirty)scheduleDraft();}
+});
 $('project-file').addEventListener('change',async event=>{
-  const file=event.target.files?.[0];if(!file||busy)return;
-  setBusy(true);
+  const file=event.target.files?.[0];if(!file||busy||sharing)return;
+  setBusy(true);document.querySelector('main').inert=true;
   try{
     if(file.size>250*1024*1024)throw new Error('編集データは250MB以下にしてください。');
     const data=validateProject(JSON.parse(await file.text()));
-    if(!window.confirm('現在の編集内容を、このファイルの内容に置き換えますか？必要な原稿は先に編集データとして保存してください。'))return;
-    await flushDraft();await restoreProject(data);draftReady=true;scheduleDraft();await flushDraft();message('編集データを読み込みました。「並び順で確認」で誌面を確認してください。');
-  }catch(error){message('読み込めませんでした。'+error.message,true);}finally{setBusy(false);}
+    if(!window.confirm('このバックアップ（'+data.items.length+'項目）から復元しますか？現在の内容は、この端末に自動退避します。退避は最新1件です。'))return;
+    await restoreBackup(data);
+  }catch(error){message('復元できませんでした。'+error.message+' 退避・保存に失敗した場合は、内容を置き換えません。',true);}
+  finally{document.querySelector('main').inert=false;setBusy(false);if(draftDirty)scheduleDraft();}
 });
 window.addEventListener('beforeunload',event=>{if(draftDirty){flushDraft();event.preventDefault();event.returnValue='';}});
 window.addEventListener('pagehide',()=>flushDraft());
@@ -552,8 +591,9 @@ async function init(){
   try{saved=await readDraft();}catch{storageError=true;}
   try{
     if(saved){await restoreProject(saved);$('draft-status').textContent='保存した下書きを復元しました。';message('前回の編集内容を復元しました。');}
-    else{const response=await fetch('assets/ZenOldMincho-Regular.ttf');if(!response.ok)throw new Error('フォントを読み込めませんでした。');await loadFont(await response.arrayBuffer(),'ZENオールド明朝');$('draft-status').textContent=storageError?'自動保存を使えません。編集データを書き出して保存してください。':'編集すると、この端末に下書きを自動保存します。';message('原稿を入れて「縦書きで確認」を押してください。');}
+    else{const response=await fetch('assets/ZenOldMincho-Regular.ttf');if(!response.ok)throw new Error('フォントを読み込めませんでした。');await loadFont(await response.arrayBuffer(),'ZENオールド明朝');$('draft-status').textContent=storageError?'自動保存を使えません。「バックアップを保存」からファイルを保存してください。':'編集すると、この端末に下書きを自動保存します。';message('原稿を入れて「縦書きで確認」を押してください。');}
     draftReady=true;
+    try{recoveryProject=await readRecovery();displayRecovery();displayBackupAction(await readBackupAction());}catch{$('backup-status').textContent='バックアップ書き出し記録・復元前の退避を読み込めませんでした。';}
   }catch(error){$('draft-status').textContent='下書きの読み込みに失敗しました。再読み込みしてお試しください。';message(error.message,true);}
   finally{setBusy(false);}
 }

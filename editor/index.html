@@ -7,16 +7,19 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23192544'/%3E%3Cpath d='M10 7v18M16 7v18M22 7v12' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css?v=21">
   <script src="assets/fontkit.js" defer></script><script src="assets/pdf-lib.js" defer></script>
-  <script type="module" src="app.js?v=34"></script>
+  <script type="module" src="app.js?v=35"></script>
 </head>
 <body>
   <header class="masthead"><div class="brand"><span class="brand-mark" aria-hidden="true">身</span><h1>身仕度 <span>組版室</span></h1></div><span class="version">編集の試作版 <b>0.3</b></span></header>
   <section class="draft-tools" aria-label="編集データの保存">
     <p id="draft-status" role="status">下書きを確認しています…</p>
-    <div class="pdf-actions"><button id="save-draft" type="button">下書きを保存</button><button id="backup-project" type="button">編集データを書き出す</button><button id="import-project" type="button">編集データを読み込む</button></div>
+    <div class="pdf-actions"><button id="save-draft" type="button">下書きを保存</button><button id="backup-project" type="button">バックアップを保存</button><button id="import-project" type="button">バックアップから復元</button></div>
     <input id="project-file" type="file" accept=".json,application/json" hidden>
-    <div id="backup-area" hidden><p id="backup-info"></p><div class="pdf-actions"><button id="share-backup" type="button" hidden>編集データを共有して保存</button><a id="download-backup" class="download-link">編集データをダウンロード</a></div></div>
-    <p class="draft-help">下書きはこの端末・ブラウザに自動保存します。別の端末や別のURLへ移すときは、編集データを書き出して持ち運べます。ブラウザのデータ削除に備えて、編集データも保存してください。</p>
+    <div id="backup-area" hidden><p id="backup-info"></p><div class="pdf-actions"><button id="share-backup" type="button" hidden>共有してファイルに保存</button><a id="download-backup" class="download-link">バックアップをダウンロード</a></div></div>
+    <p id="backup-status" class="draft-help" role="status">このブラウザでのバックアップ書き出し記録はありません。</p>
+    <p class="draft-help">バックアップには、原稿・画像・PDF・目次・並び順・設定・読み込んだフォントが入ります。「バックアップを保存」の後、共有またはダウンロードでJSONファイルを保存してください。iPhoneでは共有画面の「ファイルに保存」からiCloud Driveなどへ保存できます。従来の編集データも読み込めます。</p>
+    <div id="recovery-area" hidden><button id="undo-import" type="button">復元前の状態に戻す</button><p id="recovery-info" class="draft-help"></p></div>
+    <p class="draft-help">下書きと復元前の退避は、この端末・ブラウザ内の保存です。ブラウザのデータ削除や端末の故障に備え、バックアップファイルを端末の外にも保管してください。</p>
     <div class="clear-tools"><button id="clear-project" type="button">制作データをクリア</button><button id="undo-clear" type="button" hidden>クリアを元に戻す</button><span id="undo-clear-help" hidden>元に戻せるのは、このページを閉じる・再読み込みするまでです。</span></div>
   </section>
   <main>
