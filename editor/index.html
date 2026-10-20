@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23192544'/%3E%3Cpath d='M10 7v18M16 7v18M22 7v12' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css?v=21">
   <script src="assets/fontkit.js" defer></script><script src="assets/pdf-lib.js" defer></script>
-  <script type="module" src="app.js?v=39"></script>
+  <script type="module" src="app.js?v=40"></script>
 </head>
 <body>
   <header class="masthead"><div class="brand"><span class="brand-mark" aria-hidden="true">身</span><h1>身仕度 <span>組版室</span></h1></div><span class="version">編集の試作版 <b>0.3</b></span></header>
@@ -75,7 +75,8 @@
       </div>
       <div id="image-editor" hidden>
         <div class="field"><label for="image-title">一覧に表示する名前</label><input id="image-title" type="text" maxlength="100" placeholder="例：10月号のイラスト"></div>
-        <div class="field"><label for="image-fit">画像の収め方</label><select id="image-fit"><option value="contain">画像全体を収める（余白あり）</option><option value="cover">ページいっぱいにする（切り取り）</option></select></div>
+        <div class="field"><label for="image-fit">画像の収め方</label><select id="image-fit"><option value="contain">画像全体を収める（比率が違う場合のみ余白）</option><option value="cover">ページいっぱいにする（切り取り）</option></select></div>
+        <p>画像は本文の余白を付けず、ページ全体に配置します。縦横比を保つため、誌面と比率が違う場合は余白か切り取りが生じます。</p>
         <p id="image-description" class="image-description"></p>
         <div class="form-actions"><button id="image-preview" class="primary" type="button">並び順で確認</button><button id="replace-image" class="quiet" type="button">画像を選び直す</button></div>
       </div>
@@ -85,7 +86,7 @@
         <div class="field"><label for="pdf-title">作品タイトル（一覧・目次用）</label><input id="pdf-title" type="text" maxlength="100"></div>
         <div class="field"><label for="pdf-author">作者名（目次用）</label><input id="pdf-author" type="text" maxlength="100"></div>
         <p id="pdf-description"></p>
-        <p>PDF内の文章・配置は変更せず、全ページを元の順番で入れます。初期状態では元のページ寸法を保ちます。比率を変更した場合は、切り取らず新しい誌面に収めます。上下ボタンで作品ごと移動できます。タイトル・作者名を変えてもPDF内の文字は変わりません。</p>
+        <p>PDF内の文章・配置は変更せず、全ページを元の順番で入れます。元の縦横比を保ちながら、他のページと横幅を揃えます。本文の余白は追加しません。比率を変更した場合は、切り取らず新しい誌面に収めます。上下ボタンで作品ごと移動できます。タイトル・作者名を変えてもPDF内の文字は変わりません。</p>
         <p>1作品25MB・100ページまで。注釈・フォームがあるページは見た目を保つため画像として出力します。本文の修正は元のアプリで行い、PDFを選び直してください。</p>
         <div class="form-actions"><button id="pdf-preview" class="primary" type="button">並び順で確認</button><button id="replace-pdf" type="button">PDFを選び直す</button></div>
       </div>
