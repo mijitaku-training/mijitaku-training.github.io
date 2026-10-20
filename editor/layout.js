@@ -288,12 +288,15 @@ export function missingCharacters(doc,font){
 export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=>{}){
   const {PDFDocument,rgb,degrees}=PDFLib;
   const pdf=await PDFDocument.create();pdf.registerFontkit(fontkit);
-  const hasText=doc.pages.some(p=>p.cells?.length);
-  const verticalFont=hasText?await pdf.embedFont(fontBytes,{subset:false,features:['vert','vrt2']}):null;
-  const horizontalFont=hasText?await pdf.embedFont(fontBytes,{subset:false,features:HORIZONTAL_FEATURES}):null;
   pdf.setTitle(doc.title||'身仕度');pdf.setAuthor(doc.author||'');pdf.setCreator('身仕度 組版室 v0.3');pdf.setSubject('月刊身仕度');
   const embeddedFonts=new Map();
-  async function embedded(active){if(!active?.sourceBytes)return {vertical:verticalFont,horizontal:horizontalFont};const key=active.sourceBytes;if(!embeddedFonts.has(key))embeddedFonts.set(key,{vertical:await pdf.embedFont(key,{subset:false,features:['vert','vrt2']}),horizontal:await pdf.embedFont(key,{subset:false,features:HORIZONTAL_FEATURES})});return embeddedFonts.get(key);}
+  async function embedded(active,horizontal){
+    const bytes=active?.sourceBytes||fontBytes;
+    if(!embeddedFonts.has(bytes))embeddedFonts.set(bytes,{});
+    const fonts=embeddedFonts.get(bytes),key=horizontal?'horizontal':'vertical';
+    if(!fonts[key])fonts[key]=await pdf.embedFont(bytes,{subset:false,features:horizontal?HORIZONTAL_FEATURES:['vert','vrt2']});
+    return fonts[key];
+  }
   const sources=new Map();
   for(const page of doc.pages){
     const SPEC={width:page.width||768.24,height:page.height||768.24*Math.SQRT2};
@@ -316,13 +319,30 @@ export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=
     for(const r of page.rules||[])out.drawRectangle({x:r.x,y:SPEC.height-r.y-r.height,width:r.width,height:r.height,color:rgb(...[1,3,5].map(i=>parseInt(r.color.slice(i,i+2),16)/255))});
     for(const cell of page.cells||[]){
       const selected=page.font||font,active=cell.italic&&selected.italicFont?selected.italicFont:selected;
-      const fonts=await embedded(active),pos=glyphPosition(selected,cell);
+      const pos=glyphPosition(selected,cell),drawFont=await embedded(active,pos.sideways||pos.combined);
       if(cell.italic){const [a,b,c,d,e,f]=italicMatrix(cell,selected);out.pushOperators(PDFLib.pushGraphicsState(),PDFLib.concatTransformationMatrix(a,-b,-c,d,c*SPEC.height+e,SPEC.height*(1-d)-f));}
-      out.drawText(fontText(active,cell.char),{font:pos.sideways||pos.combined?fonts.horizontal:fonts.vertical,size:pos.fontSize,color:rgb(.067,.067,.067),x:pos.sideways?cell.x+cell.size*.12:cell.x+pos.pad,y:pos.sideways?SPEC.height-cell.y-pos.pad:SPEC.height-pos.baseline,rotate:degrees(pos.sideways?-90:0)});
+      out.drawText(fontText(active,cell.char),{font:drawFont,size:pos.fontSize,color:rgb(.067,.067,.067),x:pos.sideways?cell.x+cell.size*.12:cell.x+pos.pad,y:pos.sideways?SPEC.height-cell.y-pos.pad:SPEC.height-pos.baseline,rotate:degrees(pos.sideways?-90:0)});
       if(cell.italic)out.pushOperators(PDFLib.popGraphicsState());
     }
     onProgress(page.index+1,doc.pages.length);
     await new Promise(resolve=>setTimeout(resolve,0));
+  }
+  await pdf.flush();
+  // Keep separate shaping/Unicode maps. Only share byte-identical font programs.
+  // Limit this to fonts created above; imported PDFs are left intact.
+  const fontPrograms=new Map(),name=PDFLib.PDFName.of('FontFile2');
+  for(const fonts of embeddedFonts.values())for(const embeddedFont of Object.values(fonts)){
+    const type0=pdf.context.lookup(embeddedFont.ref);
+    const descendants=type0.lookup(PDFLib.PDFName.of('DescendantFonts'),PDFLib.PDFArray);
+    const descendant=descendants.lookup(0,PDFLib.PDFDict);
+    const object=descendant.lookup(PDFLib.PDFName.of('FontDescriptor'),PDFLib.PDFDict);
+    if(!object.has(name))continue;
+    const ref=object.get(name),stream=pdf.context.lookup(ref);
+    if(!(ref instanceof PDFLib.PDFRef)||!(stream instanceof PDFLib.PDFRawStream))continue;
+    const bytes=stream.getContents(),key=stream.dict.toString(),candidates=fontPrograms.get(key)||[];
+    const same=candidates.find(candidate=>candidate.bytes.length===bytes.length&&candidate.bytes.every((byte,index)=>byte===bytes[index]));
+    if(same){object.set(name,same.ref);pdf.context.delete(ref);}
+    else{candidates.push({ref,bytes});fontPrograms.set(key,candidates);}
   }
   return pdf.save();
 }
