@@ -7,12 +7,13 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23192544'/%3E%3Cpath d='M10 7v18M16 7v18M22 7v12' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css?v=21">
   <script src="assets/fontkit.js" defer></script><script src="assets/pdf-lib.js" defer></script>
-  <script type="module" src="app.js?v=38"></script>
+  <script type="module" src="app.js?v=39"></script>
 </head>
 <body>
   <header class="masthead"><div class="brand"><span class="brand-mark" aria-hidden="true">身</span><h1>身仕度 <span>組版室</span></h1></div><span class="version">編集の試作版 <b>0.3</b></span></header>
   <section class="draft-tools" aria-label="編集データの保存">
     <p id="draft-status" role="status">下書きを確認しています…</p>
+    <p id="temporary-warning" role="alert" hidden>一時的に開いています（自動保存なし）。閉じる・再読み込みする前に「バックアップを保存」でファイルを保存してください。以前の下書きは端末に残っています。</p>
     <div class="pdf-actions"><button id="save-draft" type="button">下書きを保存</button><button id="backup-project" type="button">バックアップを保存</button><button id="import-project" type="button">バックアップから復元</button></div>
     <input id="project-file" type="file" accept=".json,application/json" hidden>
     <div id="backup-area" hidden><p id="backup-info"></p><div class="pdf-actions"><button id="share-backup" type="button" hidden>共有してファイルに保存</button><a id="download-backup" class="download-link">バックアップをダウンロード</a></div></div>

@@ -1,14 +1,16 @@
 import {DEFAULT_PAGE_SETTINGS,normalizePageSettings,pageGeometry,applyPageSettings} from './page-settings.js?v=21';
-import {saveDraft,readDraft,readRecovery,readBackupAction,saveBackupAction,commitRestoration,backupFilename,makeProject,validateProject,bytesToBase64,base64ToBytes} from './storage.js?v=35';
-import {createWebZip} from './web-export.js?v=38';
-import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=38';
-import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=38';
+import {saveDraft,readDraft,readRecovery,readBackupAction,saveBackupAction,commitRestoration,backupFilename,makeProject,validateProject,bytesToBase64,base64ToBytes} from './storage.js?v=39';
+import {createWebZip} from './web-export.js?v=39';
+import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=39';
+import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=39';
 import {readPdfFile,restorePdfSizes} from './pdf-import.js?v=21';
 const $=id=>document.getElementById(id);
 let font,fontBytes,proof,currentPage=0,busy=false,objectUrl,revision=0,pdfFile,sharing=false,pdfOutput=null;
 let webFile=null,webUrl=null;
 let clearedProject=null;
 let recoveryProject=null,backupSnapshotAt=null;
+let temporaryMode=false,recoveryTemporary=false;
+const temporaryNotice='一時的に開いています。自動保存はされません。閉じる前に「バックアップを保存」で保存してください。';
 let previewMode='single',proofStartSide='odd';
 let draftReady=false,draftDirty=false,draftTimer=null,draftChain=Promise.resolve(),draftVersion=0,customFont=null,currentFontName='ZENオールド明朝',backupFile=null,backupUrl=null;
 let pageSettings={...DEFAULT_PAGE_SETTINGS},settingsDraft=null,settingsItemId=null;
@@ -439,11 +441,13 @@ $('share-web').addEventListener('click',async()=>{
 });
 function projectSnapshot(){saveCurrent();return makeProject({pageSettings,items,selectedId,startSide:$('start-side').value,pdfName:$('pdf-name').value,font:customFont});}
 function scheduleDraft(){
+  if(temporaryMode){draftDirty=true;draftVersion++;$('draft-status').textContent=temporaryNotice;$('backup-area').hidden=true;return;}
   if(!draftReady)return;draftDirty=true;draftVersion++;$('draft-status').textContent='下書きを保存中…';
   clearTimeout(draftTimer);draftTimer=setTimeout(()=>flushDraft(),500);
   $('backup-area').hidden=true;
 }
 function flushDraft(){
+  if(temporaryMode)return draftChain;
   clearTimeout(draftTimer);if(!draftReady||!draftDirty)return draftChain;
   const version=draftVersion,data=structuredClone(projectSnapshot());
   draftChain=draftChain.catch(()=>{}).then(()=>saveDraft(data)).then(()=>{
@@ -467,7 +471,13 @@ async function restoreProject(data,beforeApply){
     renderEditor();invalidate();renderList();$('paper-area').replaceChildren();$('proof-note').textContent='下書きを復元しました。「並び順で確認」で誌面を表示できます。';
   }finally{draftReady=wasReady;}
 }
-$('save-draft').addEventListener('click',()=>{scheduleDraft();flushDraft();});
+$('save-draft').addEventListener('click',async()=>{
+  if(!temporaryMode){scheduleDraft();flushDraft();return;}
+  if(busy||sharing)return;setBusy(true);document.querySelector('main').inert=true;
+  try{await commitRestoration(projectSnapshot(),recoveryProject);temporaryMode=false;recoveryTemporary=false;draftReady=true;draftDirty=false;$('temporary-warning').hidden=true;displayRecovery();$('draft-status').textContent='この端末に下書きを保存しました。自動保存を再開しました。';}
+  catch(error){message('下書きを保存できませんでした。'+temporaryNotice,true);}
+  finally{document.querySelector('main').inert=false;setBusy(false);}
+});
 function clearGeneratedFiles(){
   for(const url of [objectUrl,webUrl,backupUrl])if(url)URL.revokeObjectURL(url);
   objectUrl=webUrl=backupUrl=null;pdfFile=pdfOutput=webFile=backupFile=null;backupSnapshotAt=null;
@@ -492,14 +502,14 @@ async function clearProject(){
   clearTimeout(draftTimer);draftVersion++;draftReady=false;setBusy(true);document.querySelector('main').inert=true;
   try{
     // Wait for every earlier autosave before committing the empty draft.
-    await draftChain.catch(()=>{});await saveDraft(fresh);
+    await draftChain.catch(()=>{});if(!temporaryMode)await saveDraft(fresh);
     clearedProject=previous;pageSettings={...DEFAULT_PAGE_SETTINGS};closePageSettings();items=fresh.items;selectedId=blank.id;serial=2;
     $('start-side').value='odd';$('pdf-name').value='';renderEditor();invalidate();resetProofDisplay();
     for(const id of ['image-files','pdf-files','project-file','font-file'])$(id).value='';
     for(const id of ['image-title','pdf-title','pdf-author'])$(id).value='';
     for(const id of ['image-description','pdf-description'])$(id).textContent='';$('toc-entries').replaceChildren();
-    draftDirty=false;draftReady=true;$('undo-clear').hidden=$('undo-clear-help').hidden=false;
-    $('draft-status').textContent='制作データをクリアしました。新しい号を作れます。';
+    draftDirty=temporaryMode;draftReady=true;$('undo-clear').hidden=$('undo-clear-help').hidden=false;
+    $('draft-status').textContent=temporaryMode?temporaryNotice:'制作データをクリアしました。新しい号を作れます。';
     $('proof-note').textContent='原稿・画像・PDFを追加して「並び順で確認」を押してください。';
     message('制作データをクリアしました。フォントは引き継いでいます。');
   }catch(error){draftReady=wasReady;$('draft-status').textContent='クリアできませんでした。制作データは残しています。';message('下書きを更新できなかったため、クリアしませんでした。編集データを保存してからお試しください。',true);}
@@ -552,18 +562,28 @@ $('share-backup').addEventListener('click',async()=>{
 $('import-project').addEventListener('click',()=>{if(!busy&&!sharing){$('project-file').value='';$('project-file').click();}});
 function displayRecovery(){
   $('recovery-area').hidden=!recoveryProject;
-  if(recoveryProject){const at=Date.parse(recoveryProject.savedAt);$('recovery-info').textContent='直前の復元前：'+(Number.isFinite(at)?new Date(at).toLocaleString('ja-JP')+' · ':'')+recoveryProject.items.length+'項目。再読み込み後も戻せます。退避は最新1件で、次の復元時に更新されます。';}
+  if(recoveryProject){const at=Date.parse(recoveryProject.savedAt);$('recovery-info').textContent='直前の復元前：'+(Number.isFinite(at)?new Date(at).toLocaleString('ja-JP')+' · ':'')+recoveryProject.items.length+'項目。'+(recoveryTemporary?'この画面を閉じるまで戻せます。':'再読み込み後も戻せます。')+'退避は最新1件で、次の復元時に更新されます。';}
 }
 async function restoreBackup(data){
-  const previous=structuredClone(projectSnapshot()),wasReady=draftReady;
+  const previous=validateProject(projectSnapshot()),wasReady=draftReady;
   // Freeze editing, drain older writes, and persist both states before changing the screen.
   clearTimeout(draftTimer);draftReady=false;
-  try{await draftChain.catch(()=>{});await restoreProject(data,async state=>{await commitRestoration(state,previous);recoveryProject=previous;});}
+  let openedTemporarily=false;
+  try{await draftChain.catch(()=>{});await restoreProject(data,async state=>{
+    try{await commitRestoration(state,previous);}
+    catch(error){
+      if(!window.confirm('端末への保存に失敗しました。自動保存なしで一時的に開きますか？\n\n以前の下書きは変更しません。画面上の復元前の内容は、ページを閉じるまで戻せます。\n開いた内容は、閉じる・再読み込みする前に「バックアップを保存」でファイルに保存してください。'))throw error;
+      openedTemporarily=true;
+    }
+    recoveryProject=previous;
+  });}
   catch(error){draftReady=wasReady;throw error;}
-  draftVersion++;draftDirty=false;draftReady=true;resetProofDisplay();displayRecovery();
+  temporaryMode=openedTemporarily;recoveryTemporary=openedTemporarily;
+  $('temporary-warning').hidden=!temporaryMode;
+  draftVersion++;draftDirty=temporaryMode;draftReady=true;resetProofDisplay();displayRecovery();
   clearedProject=null;$('undo-clear').hidden=$('undo-clear-help').hidden=true;
-  $('draft-status').textContent='バックアップから復元し、この端末の下書きにも保存しました。';
-  message('復元しました。「並び順で確認」で誌面を確認してください。間違えた場合は「復元前の状態に戻す」を押してください。');
+  $('draft-status').textContent=temporaryMode?temporaryNotice:'バックアップから復元し、この端末の下書きにも保存しました。';
+  message(temporaryMode?temporaryNotice+'「並び順で確認」で誌面を確認できます。':'復元しました。「並び順で確認」で誌面を確認してください。間違えた場合は「復元前の状態に戻す」を押してください。',temporaryMode);
 }
 $('undo-import').addEventListener('click',async()=>{
   if(busy||sharing||!recoveryProject)return;

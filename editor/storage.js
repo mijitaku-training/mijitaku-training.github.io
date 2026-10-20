@@ -11,18 +11,34 @@ function openDb(){
     req.onblocked=()=>reject(new Error('別のタブを閉じてからお試しください。'));
   }).catch(error=>{database=null;throw error;});return database;
 }
-export async function saveDraft(data){const db=await openDb();await new Promise((resolve,reject)=>{const tx=db.transaction('drafts','readwrite');tx.objectStore('drafts').put(data,'current');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('保存が中断されました。'));});}
-export async function readDraft(){const db=await openDb();return new Promise((resolve,reject)=>{const req=db.transaction('drafts').objectStore('drafts').get('current');req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);});}
-async function readRecord(key){const db=await openDb();return new Promise((resolve,reject)=>{const req=db.transaction('drafts').objectStore('drafts').get(key);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);});}
+// Store large projects as UTF-8 binary, not a giant structured-cloned string tree.
+// Compression is lossless; exported backups keep their existing JSON format.
+async function packProject(data){
+  const blob=new Blob([JSON.stringify(data)],{type:'application/json'});
+  const gzip=typeof CompressionStream==='function'&&typeof DecompressionStream==='function';
+  const stream=gzip?blob.stream().pipeThrough(new CompressionStream('gzip')):blob.stream();
+  return {storageFormat:'mijitaku-packed-v1',encoding:gzip?'gzip':'utf8',bytes:new Uint8Array(await new Response(stream).arrayBuffer())};
+}
+async function unpackProject(record){
+  if(record?.storageFormat!=='mijitaku-packed-v1')return record;
+  let stream=new Blob([record.bytes]).stream();
+  if(record.encoding==='gzip')stream=stream.pipeThrough(new DecompressionStream('gzip'));
+  else if(record.encoding!=='utf8')throw new Error('下書きの保存形式を読み込めません。');
+  return JSON.parse(await new Response(stream).text());
+}
+export async function saveDraft(data){const packed=await packProject(data),db=await openDb();await new Promise((resolve,reject)=>{const tx=db.transaction('drafts','readwrite');tx.objectStore('drafts').put(packed,'current');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('保存が中断されました。'));});}
+export const readDraft=()=>readRecord('current');
+async function readRecord(key){const db=await openDb();const record=await new Promise((resolve,reject)=>{const req=db.transaction('drafts').objectStore('drafts').get(key);req.onsuccess=()=>resolve(req.result||null);req.onerror=()=>reject(req.error);});return unpackProject(record);}
 export const readRecovery=()=>readRecord('before-restore');
 export const readBackupAction=()=>readRecord('backup-action');
 export async function saveBackupAction(value){const db=await openDb();await new Promise((resolve,reject)=>{const tx=db.transaction('drafts','readwrite');tx.objectStore('drafts').put(value,'backup-action');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('保存が中断されました。'));});}
 // Both records commit together. On quota/transaction failure, neither is changed.
 export async function commitRestoration(next,previous){
+  const packedPrevious=await packProject(previous),packedNext=await packProject(next);
   const db=await openDb();await new Promise((resolve,reject)=>{
     const tx=db.transaction('drafts','readwrite'),store=tx.objectStore('drafts');
     tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('復元前の退避に失敗しました。'));
-    try{store.put(previous,'before-restore');store.put(next,'current');}catch(error){tx.abort();reject(error);}
+    try{store.put(packedPrevious,'before-restore');store.put(packedNext,'current');}catch(error){tx.abort();reject(error);}
   });
 }
 export function backupFilename(base,date=new Date()){
