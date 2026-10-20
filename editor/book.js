@@ -24,14 +24,16 @@ export function buildBook(items,{font,resolveFont,startSide='odd',title='身仕�
     }else if(item.kind==='pdf'){
       if(!item.pdf?.pages?.length||!item.pdf.data)throw new Error(`「${itemTitle}」のPDFを選び直してください。`);
       item.pdf.pages.forEach((image,pdfIndex)=>{
-        const width=image.pageWidth||768.24;
-        const height=item.pdfRatio?width*(item.pdfRatio.mode==='silver'?Math.SQRT2:item.pdfRatio.ratioHeight/item.pdfRatio.ratioWidth):(image.pageHeight||width*image.height/image.width);
+        // Use the book's page width while preserving the source page's proportions.
+        // Different PDF point sizes otherwise appear as smaller sheets in a mixed book.
+        const width=geometry.width,sourceWidth=image.pageWidth||image.width,sourceHeight=image.pageHeight||image.height;
+        const height=width*(item.pdfRatio?(item.pdfRatio.mode==='silver'?Math.SQRT2:item.pdfRatio.ratioHeight/item.pdfRatio.ratioWidth):sourceHeight/sourceWidth);
         pages.push({width,height,kind:'image',image,placement:imagePlacement(image.pageWidth||image.width,image.pageHeight||image.height,'contain',{width,height}),pdfSource:item.pdf,pdfIndex,cells:[],index:pages.length,itemId:item.id,itemTitle,itemPage:pdfIndex+1});
       });
     }else if(item.kind==='image'){
       if(!item.image?.data?.startsWith('data:image/jpeg;base64,'))throw new Error(`「${itemTitle}」の画像を選び直してください。`);
-      const odd=(start+(startSide==='even'?1:0))%2===0;
-      const clip={x:odd?geometry.outer:geometry.inner,y:geometry.top,width:geometry.width-geometry.inner-geometry.outer,height:geometry.bottom-geometry.top};
+      // Imported artwork is a whole page, not a block inside the text margins.
+      const clip={x:0,y:0,width:geometry.width,height:geometry.height};
       const placement=imagePlacement(item.image.width,item.image.height,item.fit,clip);placement.x+=clip.x;placement.y+=clip.y;
       pages.push({width:geometry.width,height:geometry.height,clip,kind:'image',image:item.image,placement,cells:[],index:pages.length,itemId:item.id,itemTitle,itemPage:1});
     }else throw new Error('未対応のページです。');
