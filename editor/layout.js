@@ -66,7 +66,14 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows){
     let chars=textUnits(paragraph,{combineDigits});
     if(indent&&!/^[ 　]/u.test(paragraph))chars.unshift({text:'　',display:'　',kind:'normal'});
     while(chars.length){
-      let end=Math.min(rows,chars.length);
+      // Half-width spaces consume half a row; keep source characters intact.
+      let end=0,used=0;
+      while(end<chars.length){
+        const advance=chars[end].text===' '?0.5:1;
+        if(used+advance>rows)break;
+        used+=advance;end++;
+      }
+      end=Math.max(1,end);
       if(end<chars.length){
         while(end>1&&(NO_END.has(chars[end-1].text.at(-1))||NO_START.has(chars[end].text[0])))end--;
         if(chars[end]?.ruby&&chars[end-1]?.ruby===chars[end].ruby){
@@ -74,7 +81,12 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows){
           if(first>0)end=first;
         }
       }
-      lines.push(chars.slice(0,end));chars=chars.slice(end);
+      let rowOffset=0;
+      lines.push(chars.slice(0,end).map(unit=>{
+        const positioned={...unit,rowOffset};
+        rowOffset+=unit.text===' '?0.5:1;
+        return positioned;
+      }));chars=chars.slice(end);
     }
   }
   return lines;
@@ -102,7 +114,7 @@ export function paginate({title='',author='',body='',indent=true,startSide='odd'
     const odd=(index+(startSide==='even'?1:0))%2===0;
     const right=odd?SPEC.oddRight:SPEC.evenRight;
     const cells=[];
-    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:right-(col+offset)*SPEC.linePitch-SPEC.bodySize/2,y:SPEC.top+row*SPEC.pitch,size:SPEC.bodySize,role:'body'})));
+    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:right-(col+offset)*SPEC.linePitch-SPEC.bodySize/2,y:SPEC.top+unit.rowOffset*SPEC.pitch,size:SPEC.bodySize,role:'body'})));
     if(index===0){
       titleChars.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:right-Math.floor(n/titleRows)*SPEC.linePitch-13,y:SPEC.top+56.693+(n%titleRows)*26,size:26,role:'title'}));
       const authorX=right-25.8-(authorChars.some(u=>u.ruby)?12:0)-(titleColumns>1?SPEC.linePitch:0);
@@ -122,7 +134,7 @@ function paginateAfterwordLegacy({title='あとがき',author='',body='',indent=
   const heading=textUnits(title,{combineDigits}),name=textUnits(author,{combineDigits});
   for(let cursor=0;cursor<lines.length;cursor+=8){
     const index=pages.length,cells=[],pageLines=lines.slice(cursor,cursor+8);
-    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-col*38,y:130+row*18.5,size:20,role:'body'})));
+    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-col*38,y:130+unit.rowOffset*18.5,size:20,role:'body'})));
     heading.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:586,y:186+n*24,size:24,role:'title'}));
     if(cursor+8>=lines.length)name.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-(pageLines.length+1)*38,y:876-name.length*22+n*22,size:22,role:'author'}));
     pages.push({cells,lines:pageLines,index,side:(index+(startSide==='even'?1:0))%2?'even':'odd',layout:'afterword'});
@@ -186,7 +198,7 @@ function paginateReaderLegacy({title='',author='',body='',preface='',indent=true
     const index=pages.length,first=index===0,odd=(index+(startSide==='even'?1:0))%2===0;
     const pageLines=lines.slice(cursor,cursor+(first?7:SPEC.columns));cursor+=pageLines.length;
     const cells=[],right=first?330:(odd?SPEC.oddRight:SPEC.evenRight);
-    pageLines.forEach((line,col)=>line.forEach((u,row)=>add(cells,u,right-col*SPEC.linePitch-SPEC.bodySize/2,SPEC.top+row*SPEC.pitch,SPEC.bodySize,'body')));
+    pageLines.forEach((line,col)=>line.forEach((u,row)=>add(cells,u,right-col*SPEC.linePitch-SPEC.bodySize/2,SPEC.top+u.rowOffset*SPEC.pitch,SPEC.bodySize,'body')));
     const page={cells,lines:pageLines,index,side:odd?'odd':'even',layout:'reader'};
     if(first){
       textUnits(title,{combineDigits}).forEach((u,n)=>add(cells,u,422,184+n*26,26,'title'));
@@ -195,7 +207,7 @@ function paginateReaderLegacy({title='',author='',body='',preface='',indent=true
       const heading=textUnits('まえがき',{markup:false}),headingSize=16,headingPitch=30;
       const headingX=ruleX+(ruleWidth-((heading.length-1)*headingPitch+headingSize))/2;
       heading.forEach((u,n)=>add(cells,u,headingX+n*headingPitch,343,headingSize,'preface-heading'));
-      intro.forEach((line,col)=>line.forEach((u,row)=>add(cells,u,636-col*25,382+row*17,16,'preface')));
+      intro.forEach((line,col)=>line.forEach((u,row)=>add(cells,u,636-col*25,382+u.rowOffset*17,16,'preface')));
       page.images=[{data:readerLogo,x:510,y:128,width:176,height:176}];
       // Match the visible logo edges (excluding transparent PNG padding).
       page.rules=[{x:ruleX,y:368,width:ruleWidth,height:1.5,color:'#253c59'}];
