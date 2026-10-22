@@ -1,8 +1,8 @@
 import {DEFAULT_PAGE_SETTINGS,normalizePageSettings,pageGeometry,applyPageSettings} from './page-settings.js?v=21';
 import {saveDraft,readDraft,readRecovery,readBackupAction,saveBackupAction,commitRestoration,backupFilename,makeProject,validateProject,bytesToBase64,base64ToBytes} from './storage.js?v=39';
 import {createWebZip} from './web-export.js?v=39';
-import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=41';
-import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=41';
+import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=42';
+import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=42';
 import {readPdfFile,restorePdfSizes} from './pdf-import.js?v=21';
 const $=id=>document.getElementById(id);
 let font,fontBytes,proof,currentPage=0,busy=false,objectUrl,revision=0,pdfFile,sharing=false,pdfOutput=null;
@@ -166,6 +166,7 @@ function resolveItemFont(item){
   const base=choice==='legacy'?font:fontCache.get(choice==='custom'?item.fontData?.data:choice);
   if(!base)throw new Error('フォントの準備中です。');
   const result=Object.create(base);result.sourceBytes=base.sourceBytes||fontBytes;
+  result.bodyScale=choice==='gothic'||(choice==='legacy'&&currentFontName==='ZEN角ゴシック Antique')?21/22:1;
   result.italicFont=item.italicFont&&item.italicFont!=='same'?fontCache.get(item.italicFont):base;
   return result;
 }
