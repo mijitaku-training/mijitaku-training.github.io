@@ -5,7 +5,11 @@ const NO_START = new Set(Array.from('、。，．・：；？！‼⁇⁈⁉）)
 const NO_END = new Set(Array.from('（([｛{〔〈《「『【〘〖〝‘“｟«'));
 const graphemeSplitter = typeof Intl.Segmenter==='function' ? new Intl.Segmenter('ja',{granularity:'grapheme'}) : null;
 export function graphemes(text){return graphemeSplitter?Array.from(graphemeSplitter.segment(text),x=>x.segment):Array.from(text);}
-export function normalizeBody(text){return text.replace(/\r\n?|[\u2028\u2029\u0085]/g,'\n').replace(/\u00a0/g,' ').replace(/\t/g,'　').normalize('NFC');}
+export function normalizeBody(text){
+  // Normalize tabs only for layout; the editor keeps the original manuscript.
+  return text.replace(/\r\n?|[\u2028\u2029\u0085]/g,'\n').replace(/\u00a0/g,' ')
+    .replace(/^[ 　\t]*\t[ 　\t]*/gm,'　').replace(/\t/g,' ').normalize('NFC');
+}
 const narrow=s=>s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xfee0));
 export function rubyMatches(text){return Array.from(text.matchAll(/｜([^｜《》\n]+)《([^《》\n]*)》|《([^｜《》\n]+)《([^《》\n]*)》》/g),m=>Object.assign([m[0],m[1]??m[3],m[2]??m[4]],{index:m.index}));}
 export function textUnits(text,{combineDigits=true,markup=true}={}){
