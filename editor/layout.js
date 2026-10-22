@@ -130,13 +130,14 @@ function paginateAfterwordLegacy({title='あとがき',author='',body='',indent=
   if(graphemes(body).length>50000)throw new Error('本文は50,000字までにしてください。');
   if(prefaceLength(title)>18)throw new Error('あとがきの見出しは18字までにしてください。');
   if(prefaceLength(author)>18)throw new Error('作者名は18字までにしてください。');
-  const lines=breakLines(body,indent,combineDigits,44),pages=[];
+  const rows=48,columns=9,bodySize=18,pitch=17,linePitch=34;
+  const lines=breakLines(body,indent,combineDigits,rows),pages=[];
   const heading=textUnits(title,{combineDigits}),name=textUnits(author,{combineDigits});
-  for(let cursor=0;cursor<lines.length;cursor+=8){
-    const index=pages.length,cells=[],pageLines=lines.slice(cursor,cursor+8);
-    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-col*38,y:130+unit.rowOffset*18.5,size:20,role:'body'})));
+  for(let cursor=0;cursor<lines.length;cursor+=columns){
+    const index=pages.length,cells=[],pageLines=lines.slice(cursor,cursor+columns);
+    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-col*linePitch,y:130+unit.rowOffset*pitch,size:bodySize,role:'body'})));
     heading.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:586,y:186+n*24,size:24,role:'title'}));
-    if(cursor+8>=lines.length)name.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-(pageLines.length+1)*38,y:876-name.length*22+n*22,size:22,role:'author'}));
+    if(cursor+columns>=lines.length)name.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-(pageLines.length+1)*linePitch,y:876-name.length*22+n*22,size:22,role:'author'}));
     pages.push({cells,lines:pageLines,index,side:(index+(startSide==='even'?1:0))%2?'even':'odd',layout:'afterword'});
   }
   return {title,author,body:normalizeBody(body),indent,startSide,combineDigits,pages:withRuby(pages,font)};
