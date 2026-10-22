@@ -168,6 +168,13 @@ function withRuby(pages,font){
       if(cells[0]?.role==='author'||cells[0]?.role==='toc-author')for(const cell of cells)cell.y+=saved;
     }
   }
+  // Reduce Gothic body glyphs around their centres; retain line/page geometry.
+  if(font?.bodyScale&&font.bodyScale!==1)for(const page of pages)for(const cell of page.cells){
+    if(cell.role!=='body'&&cell.role!=='preface')continue;
+    const oldSize=cell.size;cell.size*=font.bodyScale;
+    cell.x+=(oldSize-cell.size)/2;cell.y+=(oldSize-cell.size)/2;
+    if(cell.advance!==undefined)cell.advance*=font.bodyScale;
+  }
   for(const page of pages){
     const groups=new Map();
     for(const cell of page.cells){if(!cell.ruby)continue;let columns=groups.get(cell.ruby);if(!columns)groups.set(cell.ruby,columns=new Map());const key=cell.x+':'+cell.role;if(!columns.has(key))columns.set(key,[]);columns.get(key).push(cell);}
