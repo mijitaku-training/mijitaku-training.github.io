@@ -66,7 +66,7 @@ export function validateProject(input){
     if(i.kind==='blank')return {...setting,id,kind:'blank',title:'白紙ページ'};
     if(i.kind==='text'){
       if(i.layout&&!['afterword','reader'].includes(i.layout))fail();
-      return {...setting,id,kind:'text',title,author:str(i.author,1000),body:str(i.body,200000),preface:str(i.preface||'',2000),indent:i.indent!==false,combineDigits:i.combineDigits!==false,...(i.layout?{layout:i.layout}:{})};
+      return {...setting,id,kind:'text',title,author:str(i.author,1000),body:str(i.body,200000),preface:str(i.preface||'',2000),indent:i.indent!==false,combineDigits:i.combineDigits!==false,autoPunctuationSpace:i.autoPunctuationSpace===true,...(i.layout?{layout:i.layout}:{})};
     }
     if(i.kind==='toc'){
       if(!Array.isArray(i.entries)||i.entries.length>10)fail();
