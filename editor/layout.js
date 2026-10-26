@@ -108,14 +108,35 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{f
           if(first>0)end=first;
         }
       }
-      let rowOffset=0;
       const visible=chars.slice(0,end);
       while(visible.at(-1)?.automaticSpace)visible.pop();
-      lines.push(visible.map(unit=>{
+      chars=chars.slice(end);
+      // Keep manuscript spaces, but suppress punctuation spacing at a soft wrap.
+      // Explicit paragraph breaks and their indentation are handled separately.
+      const horizontalSpace=unit=>unit&&/^[ 　]+$/u.test(unit.text);
+      const lastContent=visible.findLast(unit=>!horizontalSpace(unit));
+      if(lastContent&&/[!?！？‼⁇⁈⁉]$/u.test(lastContent.text)){
+        while(horizontalSpace(chars[0]))chars.shift();
+      }
+      // Justify continuing lines only. Preserve spaces, bracket interiors, ruby
+      // groups and Latin/number runs; never stretch a paragraph's final line.
+      const gaps=[];
+      const wordUnit=unit=>/^[A-Za-z0-9０-９]+$/u.test(unit.text);
+      if(chars.length)for(let i=0;i<visible.length-1;i++){
+        const left=visible[i],right=visible[i+1];
+        if(horizontalSpace(left)||horizontalSpace(right)||NO_END.has(left.text.at(-1))||NO_START.has(right.text[0]))continue;
+        if(/[、。，．!?！？‼⁇⁈⁉]$/u.test(left.text)||(left.ruby&&left.ruby===right.ruby)||(wordUnit(left)&&wordUnit(right)))continue;
+        gaps.push(i);
+      }
+      const occupied=visible.reduce((sum,unit)=>sum+rowAdvance(unit),0);
+      const extra=gaps.length?Math.max(0,rows-occupied)/gaps.length:0;
+      const expandable=new Set(gaps);
+      let rowOffset=0;
+      lines.push(visible.map((unit,index)=>{
         const positioned={...unit,rowOffset};
-        rowOffset+=unit.text===' '?0.5:1;
+        rowOffset+=(unit.text===' '?0.5:1)+(expandable.has(index)?extra:0);
         return positioned;
-      }));chars=chars.slice(end);
+      }));
     }
   }
   return lines;
