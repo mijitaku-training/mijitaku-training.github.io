@@ -132,10 +132,40 @@ function previewRange(index,total,startSide,spread){
   return {left,right,start:Math.max(0,right),end:Math.min(total-1,left)};
 }
 $('preview-mode').addEventListener('change',()=>{previewMode=$('preview-mode').value;document.querySelector('main').classList.toggle('spread-preview',previewMode==='spread');$('spread-help').hidden=previewMode!=='spread';showPage();});
+function insertPunctuationSpaces(text){
+  // Keep source markup intact; ruby readings and combined glyphs are indivisible.
+  textUnits(text);
+  const rubyByStart=new Map(rubyMatches(text).map(match=>[match.index,match]));
+  const units=[];
+  for(let i=0;i<text.length;){
+    const ruby=rubyByStart.get(i),combined=text.slice(i).match(/^\[\[([^\[\]\n]+)\]\]/u);
+    if(ruby){i+=ruby[0].length;units.push({text:ruby[1],end:i});continue;}
+    if(combined){i+=combined[0].length;units.push({text:combined[1],end:i});continue;}
+    const char=String.fromCodePoint(text.codePointAt(i));i+=char.length;
+    if(/[｛{]/u.test(char))continue;
+    if(/[｝}]/u.test(char)){if(units.length)units.at(-1).end=i;continue;}
+    units.push({text:char,end:i});
+  }
+  const positions=[];
+  const noSpaceBefore=/^[\s!?！？‼⁇⁈⁉、。，．・：；）)\]｝}〕〉》」』】〙〗〟’”｠»ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶー〜～…‥]/u;
+  for(let i=0;i<units.length-1;i++){
+    if(/[!?！？‼⁇⁈⁉]$/u.test(units[i].text)&&!noSpaceBefore.test(units[i+1].text))positions.push(units[i].end);
+  }
+  for(let i=positions.length-1;i>=0;i--)text=text.slice(0,positions[i])+'　'+text.slice(positions[i]);
+  return text;
+}
 function typeset(scroll=false){
   if(!font&&items.some(i=>i.kind!=='image')){message('フォントの準備が終わるまでお待ちください。');return null;}
   try{
-    saveCurrent();const next=buildBook(items,{font,resolveFont:resolveItemFont,startSide:$('start-side').value,pageSettings});
+    saveCurrent();
+    const prepared=items.map(item=>item.kind==='text'&&item.autoPunctuationSpace
+      ?{...item,body:insertPunctuationSpaces(item.body),preface:insertPunctuationSpaces(item.preface||'')}:item);
+    // Spacing is now manuscript text, so do not add virtual spaces during layout.
+    const next=buildBook(prepared.map(item=>({...item,autoPunctuationSpace:false})),{font,resolveFont:resolveItemFont,startSide:$('start-side').value,pageSettings});
+    const changed=prepared.some((item,index)=>item!==items[index]&&(item.body!==items[index].body||item.preface!==(items[index].preface||'')));
+    if(changed){
+      items=prepared;renderEditor();updatePrefaceCount();revision++;scheduleDraft();
+    }
     proof=next;proofStartSide=$('start-side').value;currentPage=Math.max(0,proof.pages.findIndex(p=>p.itemId===selectedId));showPage();$('export').disabled=busy;$('export-web').disabled=busy;renderList();
     $('proof-note').textContent=`${proof.sections.length}作品・全${proof.pages.length}ページ`;
     $('download-area').hidden=true;$('web-download-area').hidden=true;webFile=null;pdfFile=null;message('組版できました。ページを確認してPDFを作れます。');
@@ -635,3 +665,4 @@ if(modelContext?.registerTool){
   window.addEventListener('pagehide',()=>lifecycle.abort(),{once:true});
 }
 renderEditor();renderList();init();
+
