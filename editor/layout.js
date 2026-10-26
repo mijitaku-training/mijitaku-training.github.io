@@ -91,6 +91,9 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{f
         used+=advance;end++;
       }
       end=Math.max(1,end);
+      // Allow one Japanese comma/period to hang beyond the line's normal length.
+      // Keep combined characters and ruby groups intact; other kinsoku rules still apply.
+      if(chars[end]?.kind==='normal'&&!chars[end].ruby&&/^[、。]$/u.test(chars[end].text))end++;
       if(end<chars.length){
         while(end>1&&(NO_END.has(chars[end-1].text.at(-1))||NO_START.has(chars[end].text[0])))end--;
         if(chars[end]?.ruby&&chars[end-1]?.ruby===chars[end].ruby){
