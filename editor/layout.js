@@ -61,7 +61,20 @@ export function textUnits(text,{combineDigits=true,markup=true}={}){
   }
   return units;
 }
-export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows){
+export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{font,size=SPEC.bodySize,pitch=SPEC.pitch}={}){
+  const advances=new Map();
+  const rowAdvance=unit=>{
+    if(unit.text===' ')return 0.5;
+    if(!font||!(unit.kind==='sideways-digit'||(unit.kind==='normal'&&isSideways(unit.display))))return 1;
+    const active=unit.italic&&font.italicFont?font.italicFont:font;
+    const key=(unit.italic?'italic:':'normal:')+unit.display;
+    if(!advances.has(key)){
+      const width=glyphRun(active,unit.display,true).positions.reduce((n,p)=>n+p.xAdvance,0)*size/active.unitsPerEm;
+      // Match the exact compression applied by withRuby, including letter spacing.
+      advances.set(key,Math.max(0.01,1-(size-width)/pitch));
+    }
+    return advances.get(key);
+  };
   const lines=[];
   const paragraphs=normalizeBody(text).split('\n');
   while(paragraphs.length>1&&paragraphs.at(-1)==='')paragraphs.pop();
@@ -73,7 +86,7 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows){
       // Half-width spaces consume half a row; keep source characters intact.
       let end=0,used=0;
       while(end<chars.length){
-        const advance=chars[end].text===' '?0.5:1;
+        const advance=rowAdvance(chars[end]);
         if(used+advance>rows)break;
         used+=advance;end++;
       }
@@ -109,7 +122,7 @@ export function paginate({title='',author='',body='',indent=true,startSide='odd'
   const firstReserve=title||author?Math.max(titleColumns,1)+2:0;
   if(firstReserve>=SPEC.columns)throw new Error('タイトルと本文が収まりません。余白を減らすか、タイトルを短くしてください。');
   if(authorChars.length*22>SPEC.bottom-SPEC.top-61.321)throw new Error('作者名が収まりません。上下の余白を減らしてください。');
-  const lines=breakLines(body,indent,combineDigits,SPEC.rows);
+  const lines=breakLines(body,indent,combineDigits,SPEC.rows,{font,size:SPEC.bodySize,pitch:SPEC.pitch});
   const pages=[];let cursor=0;
   while(cursor<lines.length){
     const index=pages.length,offset=index===0?firstReserve:0;
@@ -135,7 +148,7 @@ function paginateAfterwordLegacy({title='あとがき',author='',body='',indent=
   if(prefaceLength(title)>18)throw new Error('あとがきの見出しは18字までにしてください。');
   if(prefaceLength(author)>18)throw new Error('作者名は18字までにしてください。');
   const rows=48,columns=9,bodySize=18,pitch=17,linePitch=34;
-  const lines=breakLines(body,indent,combineDigits,rows),pages=[];
+  const lines=breakLines(body,indent,combineDigits,rows,{font,size:bodySize,pitch}),pages=[];
   const heading=textUnits(title,{combineDigits}),name=textUnits(author,{combineDigits});
   for(let cursor=0;cursor<lines.length;cursor+=columns){
     const index=pages.length,cells=[],pageLines=lines.slice(cursor,cursor+columns);
@@ -202,9 +215,9 @@ function paginateReaderLegacy({title='',author='',body='',preface='',indent=true
   if(prefaceLength(author)>18)throw new Error('作者名は18字までにしてください。');
   if(graphemes(body).length>50000)throw new Error('本文は50,000字までにしてください。');
   if(prefaceLength(preface)>150)throw new Error('前書きは150文字までにしてください。');
-  const intro=breakLines(preface,false,combineDigits,32);
+  const intro=breakLines(preface,false,combineDigits,32,{font,size:16,pitch:17});
   if(intro.length>5)throw new Error('前書きの改行・空行を減らして、5行以内に収めてください。');
-  const lines=breakLines(body,indent,combineDigits),pages=[];
+  const lines=breakLines(body,indent,combineDigits,SPEC.rows,{font}),pages=[];
   const add=(cells,unit,x,y,size,role)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x,y,size,role});
   for(let cursor=0;cursor<lines.length;){
     const index=pages.length,first=index===0,odd=(index+(startSide==='even'?1:0))%2===0;
