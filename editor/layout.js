@@ -61,6 +61,19 @@ export function textUnits(text,{combineDigits=true,markup=true}={}){
   }
   return units;
 }
+// Full-width Japanese punctuation carries half-em side bearings.
+// Trim the shared bearings, never manuscript characters or combined/ruby units.
+function punctuationReduction(left,right){
+  if(!left||!right||left.ruby||right.ruby||left.kind==='tcy'||right.kind==='tcy')return 0;
+  const a=left.text??left.source??left.char,b=right.text??right.source??right.char;
+  const open=c=>'（［｛〔〈《「『【〘〖〝｟'.includes(c)&&c.length===1;
+  const close=c=>'）］｝〕〉》」』】〙〗〟｠'.includes(c)&&c.length===1;
+  const end=c=>close(c)||/^[、。，．]$/u.test(c);
+  if((open(a)&&open(b))||(end(a)&&(end(b)||open(b))))return 0.5;
+  if((close(a)&&/^[・：；]$/u.test(b))||(/^[・：；]$/u.test(a)&&open(b)))return 0.5;
+  if((a==='　'&&open(b))||(close(a)&&b==='　'))return 0.5;
+  return 0;
+}
 export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{font,size=SPEC.bodySize,pitch=SPEC.pitch,autoPunctuationSpace=false}={}){
   const advances=new Map();
   const rowAdvance=unit=>{
@@ -93,7 +106,7 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{f
       // Half-width spaces consume half a row; keep source characters intact.
       let end=0,used=0;
       while(end<chars.length){
-        const advance=rowAdvance(chars[end]);
+        const advance=rowAdvance(chars[end])-punctuationReduction(chars[end-1],chars[end])*size/pitch;
         if(used+advance>rows)break;
         used+=advance;end++;
       }
@@ -124,11 +137,11 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{f
       const wordUnit=unit=>/^[A-Za-z0-9０-９]+$/u.test(unit.text);
       if(chars.length)for(let i=0;i<visible.length-1;i++){
         const left=visible[i],right=visible[i+1];
-        if(horizontalSpace(left)||horizontalSpace(right)||NO_END.has(left.text.at(-1))||NO_START.has(right.text[0]))continue;
+        if(horizontalSpace(left)||horizontalSpace(right)||punctuationReduction(left,right)||NO_END.has(left.text.at(-1))||NO_START.has(right.text[0]))continue;
         if(/[、。，．!?！？‼⁇⁈⁉]$/u.test(left.text)||(left.ruby&&left.ruby===right.ruby)||(wordUnit(left)&&wordUnit(right)))continue;
         gaps.push(i);
       }
-      const occupied=visible.reduce((sum,unit)=>sum+rowAdvance(unit),0);
+      const occupied=visible.reduce((sum,unit,index)=>sum+rowAdvance(unit)-punctuationReduction(visible[index-1],unit)*size/pitch,0);
       const extra=gaps.length?Math.max(0,rows-occupied)/gaps.length:0;
       const expandable=new Set(gaps);
       let rowOffset=0;
@@ -198,7 +211,7 @@ export function prefaceLength(text){return graphemes(plainText(text).replace(/\n
 function withRuby(pages,font){
   // Use the selected font's horizontal advance for sideways Latin letters.
   // Keep explicit spaces, column breaks and bottom-aligned author names intact.
-  if(font)for(const page of pages){
+  for(const page of pages){
     const columns=new Map();
     for(const cell of page.cells){
       if(cell.role==='preface-heading')continue;
@@ -207,10 +220,11 @@ function withRuby(pages,font){
       columns.get(key).push(cell);
     }
     for(const cells of columns.values()){
-      cells.sort((a,b)=>a.y-b.y);let saved=0;
+      cells.sort((a,b)=>a.y-b.y);let saved=0,previous=null;
       for(const cell of cells){
-        cell.y-=saved;
-        if(cell.kind==='sideways-digit'||(cell.kind==='normal'&&isSideways(cell.char))){
+        saved+=punctuationReduction(previous,cell)*cell.size;
+        cell.y-=saved;previous=cell;
+        if(font&&(cell.kind==='sideways-digit'||(cell.kind==='normal'&&isSideways(cell.char)))){
           const active=cell.italic&&font.italicFont?font.italicFont:font;const run=glyphRun(active,cell.char,true);
           cell.advance=run.positions.reduce((n,p)=>n+p.xAdvance,0)*cell.size/active.unitsPerEm;
           cell.kind='sideways-tight';saved+=cell.size-cell.advance;
