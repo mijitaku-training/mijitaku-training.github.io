@@ -111,10 +111,37 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{f
         used+=advance;end++;
       }
       end=Math.max(1,end);
+      // Pull prohibited line-start characters into this line using safe glyph gaps.
+      // Font size and glyph proportions are never changed.
+      let tightening=null;
+      if(chars[end]&&NO_START.has(chars[end].text[0])&&!/^[、。]$/u.test(chars[end].text)){
+        let target=end;
+        while(target<chars.length&&NO_START.has(chars[target].text[0])&&!/^[、。]$/u.test(chars[target].text))target++;
+        const candidate=chars.slice(0,target),capacities=[];
+        let total=0;
+        for(let i=0;i<candidate.length-1;i++){
+          const a=candidate[i],b=candidate[i+1];let capacity=0;
+          if(font&&!a.ruby&&!b.ruby&&!a.italic&&!b.italic&&a.kind==='normal'&&b.kind==='normal'&&!/\s/u.test(a.text+b.text)&&!isSideways(a.display)&&!isSideways(b.display)&&!punctuationReduction(a,b)){
+            const bounds=u=>{
+              const pos=glyphPosition(font,{char:u.display,kind:u.kind,size,x:0,y:0});
+              return {top:pos.baseline-Math.max(...pos.run.glyphs.map((g,n)=>g.bbox.maxY+pos.run.positions[n].yOffset))*pos.scale,
+                bottom:pos.baseline-Math.min(...pos.run.glyphs.map((g,n)=>g.bbox.minY+pos.run.positions[n].yOffset))*pos.scale};
+            };
+            const left=bounds(a),right=bounds(b);
+            capacity=Math.max(0,Math.min(size*.04,pitch+right.top-left.bottom-size*.02))/pitch;
+          }
+          capacities.push(capacity);total+=capacity;
+        }
+        const occupied=candidate.reduce((sum,u,i)=>sum+rowAdvance(u)-punctuationReduction(candidate[i-1],u)*size/pitch,0);
+        const excess=Math.max(0,occupied-rows);
+        if(excess<=total&&(!chars[target]||!NO_START.has(chars[target].text[0]))&&!(chars[target]?.ruby&&chars[target-1]?.ruby===chars[target].ruby)){
+          end=target;tightening=capacities.map(c=>total?c*excess/total:0);
+        }
+      }
       // Allow one Japanese comma/period to hang beyond the line's normal length.
       // Keep combined characters and ruby groups intact; other kinsoku rules still apply.
       if(chars[end]?.kind==='normal'&&!chars[end].ruby&&/^[、。]$/u.test(chars[end].text))end++;
-      if(end<chars.length){
+      if(end<chars.length&&!tightening){
         while(end>1&&(NO_END.has(chars[end-1].text.at(-1))||NO_START.has(chars[end].text[0])))end--;
         if(chars[end]?.ruby&&chars[end-1]?.ruby===chars[end].ruby){
           const group=chars[end].ruby;let first=end;while(first>0&&chars[first-1].ruby===group)first--;
@@ -135,7 +162,7 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{f
       // groups and Latin/number runs; never stretch a paragraph's final line.
       const gaps=[];
       const wordUnit=unit=>/^[A-Za-z0-9０-９]+$/u.test(unit.text);
-      if(chars.length)for(let i=0;i<visible.length-1;i++){
+      if(chars.length&&!tightening)for(let i=0;i<visible.length-1;i++){
         const left=visible[i],right=visible[i+1];
         if(horizontalSpace(left)||horizontalSpace(right)||punctuationReduction(left,right)||NO_END.has(left.text.at(-1))||NO_START.has(right.text[0]))continue;
         if(/[、。，．!?！？‼⁇⁈⁉]$/u.test(left.text)||(left.ruby&&left.ruby===right.ruby)||(wordUnit(left)&&wordUnit(right)))continue;
@@ -147,7 +174,7 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{f
       let rowOffset=0;
       lines.push(visible.map((unit,index)=>{
         const positioned={...unit,rowOffset};
-        rowOffset+=(unit.text===' '?0.5:1)+(expandable.has(index)?extra:0);
+        rowOffset+=(unit.text===' '?0.5:1)+(expandable.has(index)?extra:0)-(tightening?.[index]||0);
         return positioned;
       }));
     }
