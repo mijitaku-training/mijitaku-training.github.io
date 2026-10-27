@@ -21,3 +21,11 @@
 
 
 #inline-image-panel{margin:20px 0;padding:12px;border:1px solid #bbc4d3;border-radius:8px}.inline-card{margin:16px 0;padding:12px;background:#fff;border:1px solid #ccd2df;border-radius:8px}.inline-card label{display:block;margin:12px 0}.inline-card input,.inline-card select,.inline-card textarea{display:block;width:100%;box-sizing:border-box}.inline-card button{margin:6px 6px 0 0}.inline-card h4{overflow-wrap:anywhere}.inline-crop{position:relative;width:100%;max-height:none;overflow:hidden;background:#ddd;touch-action:none;cursor:grab}.inline-crop img{position:absolute;max-width:none;pointer-events:none;user-select:none}.inline-card input[type=range]{padding:8px 0;min-height:32px}
+
+/* Keep size controls separate from the wrapping ruby/combined-character toolbar. */
+#size-tools{display:grid;grid-template-columns:minmax(80px,110px) minmax(0,1fr);gap:10px 12px;align-items:center;margin:18px 0 0;padding-top:16px;border-top:1px solid var(--line)}
+#size-tools>label{grid-column:1/-1;display:block;font-size:14px;font-weight:600;line-height:1.6;margin:0}
+#size-tools>input{width:100%;min-width:0;min-height:44px;padding:10px 12px;border:1px solid #bcc5d6;border-radius:5px;background:white;color:var(--ink);font-size:16px}
+#size-tools>button{justify-self:start;max-width:100%;white-space:normal;line-height:1.5}
+#unsize-selection{grid-column:1/-1}
+
