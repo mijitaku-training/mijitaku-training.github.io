@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23192544'/%3E%3Cpath d='M10 7v18M16 7v18M22 7v12' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css?v=53">
   <script src="assets/fontkit.js" defer></script><script src="assets/pdf-lib.js" defer></script>
-  <script type="module" src="app.js?v=54"></script>
+  <script type="module" src="app.js?v=55"></script>
 </head>
 <body>
   <header class="masthead"><div class="brand"><span class="brand-mark" aria-hidden="true">身</span><h1>身仕度 <span>組版室</span></h1></div><span class="version">編集の試作版 <b>0.3</b></span></header>
@@ -48,7 +48,7 @@
             <p>入力欄の指定記号は誌面には出ません。変更後は「縦書きで確認」を押してください。</p>
             <h3>級数（文字サイズ）</h3>
             <p>本文を選択し、級数を入力して「級数を適用」を押します。8〜64Qで指定でき、1Qは0.25mmです。標準の級数は設定欄の下に表示されます。</p>
-            <p>入力例：<code>[Q=40]文字[/Q]</code><br>元に戻すには、対象を選択するか指定内にカーソルを置いて「本文の標準サイズに戻す」を押します。大きい文字を入れると、その作品の行間やページ数も変わります。</p>
+            <p>入力例：<code>[Q=40]文字[/Q]</code><br>元に戻すには、対象を選択するか指定内にカーソルを置いて「本文の標準サイズに戻す」を押します。大きい文字がある行の周囲だけ、行間を調整します。文字の量や大きさによってページ数が変わることがあります。</p>
             <h3>斜体</h3>
             <p>半角の波括弧で <code>{文字}</code> と囲みます。フォントは「組み方・フォント」で指定できます。</p>
             <p>ルビや組文字も <code>{《きみ《あなた》》}</code>・<code>{[[12]]}</code> のように囲めます。読み仮名は斜体になりません。改行する場合は行ごとに囲んでください。</p>
@@ -161,6 +161,7 @@
   <footer><span>月刊 身仕度</span><a href="assets/font-license.txt" target="_blank" rel="noopener">フォントのライセンス</a></footer>
 </body>
 </html>
+
 
 
 

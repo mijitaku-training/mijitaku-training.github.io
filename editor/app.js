@@ -1,10 +1,10 @@
 import {changeTextSize} from './text-size.js?v=52';
-import {createInlineEditor} from './inline-editor.js?v=52';
+import {createInlineEditor} from './inline-editor.js?v=55';
 import {DEFAULT_PAGE_SETTINGS,normalizePageSettings,pageGeometry,applyPageSettings} from './page-settings.js?v=21';
 import {saveDraft,readDraft,readRecovery,readBackupAction,saveBackupAction,commitRestoration,backupFilename,makeProject,validateProject,bytesToBase64,base64ToBytes} from './storage.js?v=51';
-import {createWebZip} from './web-export.js?v=52';
-import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=52';
-import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=52';
+import {createWebZip} from './web-export.js?v=55';
+import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=55';
+import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=55';
 import {readPdfFile,restorePdfSizes} from './pdf-import.js?v=21';
 const $=id=>document.getElementById(id);
 let font,fontBytes,proof,currentPage=0,busy=false,objectUrl,revision=0,pdfFile,sharing=false,pdfOutput=null;
@@ -694,6 +694,7 @@ renderEditor();renderList();init();
 inlineEditor=createInlineEditor({host:$('inline-image-host'),getItem:selectedItem,isBusy:()=>busy,changed:invalidate,getFrame:pic=>{saveCurrent();const item=selectedItem();const doc=buildBook([item],{font,resolveFont:resolveItemFont,startSide:$('start-side').value,pageSettings});return doc.pages[pic.page-1]?.images?.find(i=>i.clip)?.clip;}});
 inlineEditor.render();
 $('inline-image-panel').addEventListener('toggle',()=>{if($('inline-image-panel').open)inlineEditor.render();});
+
 
 
 

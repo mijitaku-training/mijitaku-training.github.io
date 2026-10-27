@@ -1,5 +1,5 @@
-import {placements,cropPlacement} from './inline-layout.js?v=52';
-import {readImageFile} from './book.js?v=52';
+import {placements,cropPlacement} from './inline-layout.js?v=55';
+import {readImageFile} from './book.js?v=55';
 export function createInlineEditor({host,getItem,changed,getFrame,isBusy}){
  const make=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e;};
  const heading=make('h3','本文内の画像'),help=make('p','作品内のページ番号を指定します。1ページに1枚。画像の上下に横書きの注釈を付けられます。'),add=make('button','＋ 本文内に画像を追加'),file=make('input'),list=make('div');
@@ -41,5 +41,6 @@ export function createInlineEditor({host,getItem,changed,getFrame,isBusy}){
  }
  return {render};
 }
+
 
 

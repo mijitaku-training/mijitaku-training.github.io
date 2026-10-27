@@ -89,7 +89,7 @@ function punctuationReduction(left,right){
   if((a==='　'&&open(b))||(close(a)&&b==='　'))return 0.5;
   return 0;
 }
-export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{font,size=SPEC.bodySize,pitch=SPEC.pitch,autoPunctuationSpace=false,lineRows}={}){
+export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{font,size=SPEC.bodySize,pitch=SPEC.pitch,autoPunctuationSpace=false,lineRows,acceptLine}={}){
   const advances=new Map();
   const unitSize=u=>u?.size??size;
   const trim=(a,b)=>punctuationReduction(a,b)*Math.min(unitSize(a),unitSize(b))/pitch;
@@ -118,7 +118,7 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{f
   const paragraphs=normalizeBody(text).split('\n');
   while(paragraphs.length>1&&paragraphs.at(-1)==='')paragraphs.pop();
   for(const paragraph of paragraphs){
-    if(!paragraph.trim()){lines.push([]);continue;}
+    if(!paragraph.trim()){if(lineRows)lineRows(lines.length);if(acceptLine)acceptLine([],lines.length);lines.push([]);continue;}
     let chars=textUnits(paragraph,{combineDigits});
     if(autoPunctuationSpace)chars=chars.flatMap((unit,index,all)=>{
       const next=all[index+1];
@@ -177,6 +177,7 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{f
       }
       const visible=chars.slice(0,end);
       while(visible.at(-1)?.automaticSpace)visible.pop();
+      if(acceptLine&&!acceptLine(visible,lines.length))continue;
       chars=chars.slice(end);
       // Keep manuscript spaces, but suppress punctuation spacing at a soft wrap.
       // Explicit paragraph breaks and their indentation are handled separately.
@@ -210,15 +211,23 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{f
   }
   return lines;
 }
-export function bodyGeometry(pageSettings,body='',baseSize=22,basePitch=38){
-  const g=pageGeometry(pageSettings);
-  const maxSize=Math.max(baseSize,...Array.from(body.matchAll(/\[Q=([0-9]+(?:\.[0-9]+)?)\]/g),m=>Number(m[1])*72/101.6));
-  if(maxSize<=baseSize)return {...g,columnSize:baseSize};
-  const extra=maxSize-baseSize;
-  return {...g,columnSize:maxSize,linePitch:Math.max(basePitch,maxSize*1.5+5),
-    columns:Math.floor((g.width-g.inner-g.outer-maxSize)/(Math.max(basePitch,maxSize*1.5+5)))+1,
-    oddRight:g.oddRight-extra/2,evenRight:g.evenRight-extra/2,
-    rows:Math.max(1,Math.floor((g.bottom-g.top-Math.max(0,g.pitch-g.bodySize))/g.pitch))};
+export function bodyGeometry(pageSettings){return {...pageGeometry(pageSettings),columnSize:22};}
+// Reserve extra width only beside the line that contains enlarged glyphs.
+// Ordinary lines retain exactly their original centre-to-centre distance.
+export function lineInsets(line,baseSize=22){
+  let left=0,right=0;
+  for(const u of line){const extra=Math.max(0,(u.size??baseSize)-baseSize);left=Math.max(left,extra/2);right=Math.max(right,extra/2+(u.ruby?extra*.42:0));}
+  return {left,right};
+}
+export function packLines(lines,cursor,columns,baseSize=22,pitch=38){
+  const packed=[];let previous=null;
+  for(let i=cursor;i<lines.length;i++){
+    const inset=lineInsets(lines[i],baseSize);
+    const offset=previous?previous.offset+pitch+previous.inset.left+inset.right:inset.right;
+    if(offset+inset.left>(columns-1)*pitch+1e-6){if(!packed.length)throw new Error('大きい文字が本文幅に収まりません。級数か余白を小さくしてください。');break;}
+    previous={line:lines[i],offset,inset};packed.push(previous);
+  }
+  return packed;
 }
 export function sizedCell(unit,baseSize,x){
   const size=unit.size??baseSize;
@@ -243,11 +252,11 @@ export function paginate({title='',author='',body='',indent=true,startSide='odd'
   while(cursor<lines.length){
     const index=pages.length,offset=index===0?firstReserve:0;
     const count=SPEC.columns-offset;
-    const pageLines=lines.slice(cursor,cursor+count);cursor+=pageLines.length;
+    const packed=packLines(lines,cursor,count,SPEC.bodySize,SPEC.linePitch),pageLines=packed.map(p=>p.line);cursor+=pageLines.length;
     const odd=(index+(startSide==='even'?1:0))%2===0;
     const right=odd?SPEC.oddRight:SPEC.evenRight;
     const cells=[];
-    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:right-(col+offset)*SPEC.linePitch-SPEC.bodySize/2,y:SPEC.top+unit.rowOffset*SPEC.pitch,...sizedCell(unit,SPEC.bodySize,right-(col+offset)*SPEC.linePitch-SPEC.bodySize/2),role:'body'})));
+    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:right-offset*SPEC.linePitch-packed[col].offset-SPEC.bodySize/2,y:SPEC.top+unit.rowOffset*SPEC.pitch,...sizedCell(unit,SPEC.bodySize,right-offset*SPEC.linePitch-packed[col].offset-SPEC.bodySize/2),role:'body'})));
     if(index===0){
       titleChars.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:right-Math.floor(n/titleRows)*SPEC.linePitch-13,y:SPEC.top+56.693+(n%titleRows)*26,size:26,role:'title'}));
       const authorX=right-25.8-(authorChars.some(u=>u.ruby)?12:0)-(titleColumns>1?SPEC.linePitch:0);
@@ -264,15 +273,15 @@ function paginateAfterwordLegacy({title='あとがき',author='',body='',indent=
   if(prefaceLength(title)>18)throw new Error('あとがきの見出しは18字までにしてください。');
   if(prefaceLength(author)>18)throw new Error('作者名は18字までにしてください。');
   const rows=48,bodySize=18,pitch=17;
-  const maxSize=Math.max(bodySize,...textUnits(normalizeBody(body)).map(u=>u.size||0));
-  const linePitch=maxSize>bodySize?Math.max(34,maxSize*1.5+5):34,columns=Math.max(1,Math.floor((8*34)/linePitch)+1);
+  const linePitch=34,columns=9;
   const lines=breakLines(body,indent,combineDigits,rows,{font,size:bodySize,pitch,autoPunctuationSpace}),pages=[];
   const heading=textUnits(title,{combineDigits}),name=textUnits(author,{combineDigits});
-  for(let cursor=0;cursor<lines.length;cursor+=columns){
-    const index=pages.length,cells=[],pageLines=lines.slice(cursor,cursor+columns);
-    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-col*linePitch,y:130+unit.rowOffset*pitch,...sizedCell(unit,bodySize,500-col*linePitch),role:'body'})));
+  for(let cursor=0;cursor<lines.length;){
+    const packed=packLines(lines,cursor,columns,bodySize,linePitch);
+    const index=pages.length,cells=[],pageLines=packed.map(p=>p.line);cursor+=pageLines.length;
+    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-packed[col].offset,y:130+unit.rowOffset*pitch,...sizedCell(unit,bodySize,500-packed[col].offset),role:'body'})));
     heading.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:586,y:186+n*24,size:24,role:'title'}));
-    if(cursor+columns>=lines.length)name.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-(pageLines.length+1)*linePitch,y:876-name.length*22+n*22,size:22,role:'author'}));
+    if(cursor>=lines.length)name.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-packed.at(-1).offset-packed.at(-1).inset.left-2*linePitch,y:876-name.length*22+n*22,size:22,role:'author'}));
     pages.push({cells,lines:pageLines,index,side:(index+(startSide==='even'?1:0))%2?'even':'odd',layout:'afterword'});
   }
   return {title,author,body:normalizeBody(body),indent,startSide,combineDigits,pages:withRuby(pages,font)};
@@ -338,14 +347,13 @@ function paginateReaderLegacy({title='',author='',body='',preface='',indent=true
   const intro=breakLines(preface,false,combineDigits,32,{font,size:16,pitch:17,autoPunctuationSpace});
   if(intro.length>5)throw new Error('前書きの改行・空行を減らして、5行以内に収めてください。');
   const lines=breakLines(body,indent,combineDigits,SPEC.rows,{font,autoPunctuationSpace}),pages=[];
-  const maxSize=Math.max(22,...lines.flat().map(u=>u.size||0)),linePitch=maxSize>22?Math.max(38,maxSize*1.5+5):38;
-  const firstColumns=Math.max(1,Math.floor(6*38/linePitch)+1),columns=Math.max(1,Math.floor(14*38/linePitch)+1);
+  const linePitch=38,firstColumns=7,columns=15;
   const add=(cells,unit,x,y,size,role)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x,y,size,...(role==='body'?sizedCell(unit,size,x):{}),role});
   for(let cursor=0;cursor<lines.length;){
     const index=pages.length,first=index===0,odd=(index+(startSide==='even'?1:0))%2===0;
-    const pageLines=lines.slice(cursor,cursor+(first?firstColumns:columns));cursor+=pageLines.length;
+    const packed=packLines(lines,cursor,first?firstColumns:columns,SPEC.bodySize,linePitch),pageLines=packed.map(p=>p.line);cursor+=pageLines.length;
     const cells=[],right=first?330:(odd?SPEC.oddRight:SPEC.evenRight);
-    pageLines.forEach((line,col)=>line.forEach((u,row)=>add(cells,u,right-col*linePitch-SPEC.bodySize/2,SPEC.top+u.rowOffset*SPEC.pitch,SPEC.bodySize,'body')));
+    pageLines.forEach((line,col)=>line.forEach((u,row)=>add(cells,u,right-packed[col].offset-SPEC.bodySize/2,SPEC.top+u.rowOffset*SPEC.pitch,SPEC.bodySize,'body')));
     const page={cells,lines:pageLines,index,side:odd?'odd':'even',layout:'reader'};
     if(first){
       textUnits(title,{combineDigits}).forEach((u,n)=>add(cells,u,422,184+n*26,26,'title'));
@@ -509,5 +517,6 @@ export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=
 export function paginateAfterword(options){return fitTemplate(paginateAfterwordLegacy(options),options.pageSettings,options.startSide);}
 export function paginateReader(options){return fitTemplate(paginateReaderLegacy(options),options.pageSettings,options.startSide);}
 export function paginateToc(options){return fitTemplate(paginateTocLegacy(options),options.pageSettings,options.startSide);}
+
 
 
