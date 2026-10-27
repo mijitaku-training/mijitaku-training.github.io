@@ -1,9 +1,10 @@
-import {createInlineEditor} from './inline-editor.js?v=51';
+import {changeTextSize} from './text-size.js?v=52';
+import {createInlineEditor} from './inline-editor.js?v=52';
 import {DEFAULT_PAGE_SETTINGS,normalizePageSettings,pageGeometry,applyPageSettings} from './page-settings.js?v=21';
 import {saveDraft,readDraft,readRecovery,readBackupAction,saveBackupAction,commitRestoration,backupFilename,makeProject,validateProject,bytesToBase64,base64ToBytes} from './storage.js?v=51';
-import {createWebZip} from './web-export.js?v=50';
-import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=50';
-import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=51';
+import {createWebZip} from './web-export.js?v=52';
+import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=52';
+import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=52';
 import {readPdfFile,restorePdfSizes} from './pdf-import.js?v=21';
 const $=id=>document.getElementById(id);
 let font,fontBytes,proof,currentPage=0,busy=false,objectUrl,revision=0,pdfFile,sharing=false,pdfOutput=null;
@@ -141,6 +142,8 @@ function insertPunctuationSpaces(text){
   const rubyByStart=new Map(rubyMatches(text).map(match=>[match.index,match]));
   const units=[];
   for(let i=0;i<text.length;){
+    const sizeTag=text.slice(i).match(/^\[Q=[0-9]+(?:\.[0-9]+)?\]|^\[\/Q\]/u);
+    if(sizeTag){i+=sizeTag[0].length;if(sizeTag[0]==='[/Q]'&&units.length)units.at(-1).end=i;continue;}
     const ruby=rubyByStart.get(i),combined=text.slice(i).match(/^\[\[([^\[\]\n]+)\]\]/u);
     if(ruby){i+=ruby[0].length;units.push({text:ruby[1],end:i});continue;}
     if(combined){i+=combined[0].length;units.push({text:combined[1],end:i});continue;}
@@ -391,6 +394,19 @@ function unrubyText(input){
   replaceTextRange(input,match.index,match.index+match[0].length,match[1],match.index,match.index+match[1].length);message('ルビを解除しました。');
 }
 for(const [id,label] of [['title','作品タイトル'],['author','作者名'],['preface','まえがき'],['pdf-title','PDFの目次用タイトル'],['pdf-author','PDFの目次用作者名']]){const input=$(id);input.maxLength=id==='preface'?2000:1000;addCombineTools(input,label);}
+function applySelectionSize(reset=false){
+  if(busy)return;
+  const input=$('body');
+  try{
+    const result=changeTextSize(input.value,input.selectionStart,input.selectionEnd,reset?null:Number($('selection-size').value));
+    textUnits(result.text);
+    replaceTextRange(input,0,input.value.length,result.text,result.start,result.end);
+    message(reset?'選択部分を本文の標準サイズに戻しました。プレビューで確認してください。':'選択部分の級数を変更しました。プレビューで確認してください。');
+  }catch(error){message(error.message,true);}
+}
+for(const id of ['size-selection','unsize-selection'])$(id).addEventListener('pointerdown',event=>event.preventDefault());
+$('size-selection').addEventListener('click',()=>applySelectionSize());
+$('unsize-selection').addEventListener('click',()=>applySelectionSize(true));
 $('ruby-selection').addEventListener('click',()=>rubyText($('body')));
 $('unruby-selection').addEventListener('click',()=>unrubyText($('body')));
 $('combine-selection').addEventListener('click',()=>combineText($('body')));
@@ -674,4 +690,5 @@ renderEditor();renderList();init();
 inlineEditor=createInlineEditor({host:$('inline-image-host'),getItem:selectedItem,isBusy:()=>busy,changed:invalidate,getFrame:pic=>{saveCurrent();const item=selectedItem();const doc=buildBook([item],{font,resolveFont:resolveItemFont,startSide:$('start-side').value,pageSettings});return doc.pages[pic.page-1]?.images?.find(i=>i.clip)?.clip;}});
 inlineEditor.render();
 $('inline-image-panel').addEventListener('toggle',()=>{if($('inline-image-panel').open)inlineEditor.render();});
+
 

@@ -7,7 +7,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23192544'/%3E%3Cpath d='M10 7v18M16 7v18M22 7v12' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css?v=50">
   <script src="assets/fontkit.js" defer></script><script src="assets/pdf-lib.js" defer></script>
-  <script type="module" src="app.js?v=51"></script>
+  <script type="module" src="app.js?v=52"></script>
 </head>
 <body>
   <header class="masthead"><div class="brand"><span class="brand-mark" aria-hidden="true">身</span><h1>身仕度 <span>組版室</span></h1></div><span class="version">編集の試作版 <b>0.3</b></span></header>
@@ -41,6 +41,8 @@
         <div class="field"><label for="author">作者名</label><input id="author" type="text" maxlength="18" placeholder="作者名" autocomplete="off"></div>
         <div class="field body-field"><div class="label-row"><label for="body">本文</label><span id="char-count">0字</span></div><textarea id="body" placeholder="原稿をそのまま貼り付けてください。&#10;&#10;改行と空行は、誌面にも反映されます。" maxlength="50000" spellcheck="false"></textarea></div>
         <div class="combine-tools"><button id="combine-selection" type="button">組文字にする</button><button id="uncombine-selection" type="button">組文字を解除</button><button id="ruby-selection" type="button">ルビを付ける</button><button id="unruby-selection" type="button">ルビを解除</button></div>
+        <div class="combine-tools" id="size-tools"><label for="selection-size">選択部分の級数（Q）</label><input id="selection-size" type="number" min="8" max="64" step="0.5" value="40" inputmode="decimal" style="width:90px"><button type="button" id="size-selection">級数を適用</button><button type="button" id="unsize-selection">本文の標準サイズに戻す</button></div>
+        <p class="hint">本文を選択して級数を指定できます。8〜64Q（1Q＝0.25mm）。入力欄には [Q=40]文字[/Q] と表示され、誌面には文字だけが出ます。大きい文字を入れると、その作品の行間とページ数も変わります。</p>
         <p class="combine-help">斜体は半角の {文字} で囲んで指定します。括弧は誌面に出ません。{《きみ《あなた》》}・{[[12]]} のようにルビや組文字も囲めます（読み仮名は通常のまま）。改行する場合は行ごとに囲んでください。従来の全角 ｛文字｝ も使えます。開き括弧と閉じ括弧は半角・全角を揃えてください。</p>
         <p class="combine-help">ルビは文字を選択して「ルビを付ける」を押し、読み仮名を入力します。《きみ《あなた》》と直接入力するだけでもルビを付けられます。漢字以外にも使えます。従来の｜きみ《あなた》にも対応しています。変更・解除は指定内にカーソルを置いて押してください。<br>各入力欄の1〜4文字を選択して「組文字にする」。[[km]] のように囲むと、1文字分の枠に横並びで入ります。解除は囲んだ部分にカーソルを置いて押してください。</p>
         <details id="inline-image-panel"><summary>本文内の画像・トリミング</summary><div id="inline-image-host"></div></details>
@@ -143,6 +145,7 @@
   <footer><span>月刊 身仕度</span><a href="assets/font-license.txt" target="_blank" rel="noopener">フォントのライセンス</a></footer>
 </body>
 </html>
+
 
 
 

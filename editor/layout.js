@@ -13,6 +13,21 @@ export function normalizeBody(text){
 const narrow=s=>s.replace(/[！-～]/g,c=>String.fromCharCode(c.charCodeAt(0)-0xfee0));
 export function rubyMatches(text){return Array.from(text.matchAll(/｜([^｜《》\n]+)《([^《》\n]*)》|《([^｜《》\n]+)《([^《》\n]*)》》/g),m=>Object.assign([m[0],m[1]??m[3],m[2]??m[4]],{index:m.index}));}
 export function textUnits(text,{combineDigits=true,markup=true}={}){
+  // Size tags are stored in the manuscript, like ruby and combined-character tags.
+  if(/\[Q=|\[\/Q\]/u.test(text)){
+    const result=[];let cursor=0;
+    for(const m of text.matchAll(/\[Q=([0-9]+(?:\.[0-9]+)?)\]([^\n]*?)\[\/Q\]/gu)){
+      const q=Number(m[1]);
+      if(q<8||q>64||/\[Q=|\[\/Q\]/u.test(m[2]))throw new Error('級数は8〜64Qで指定してください。級数の入れ子は使えません。');
+      const before=text.slice(cursor,m.index);
+      if(/\[Q=|\[\/Q\]/u.test(before))throw new Error('級数の指定が閉じていません。[Q=40]文字[/Q] の形にしてください。');
+      result.push(...textUnits(before,{combineDigits,markup}),...textUnits(m[2],{combineDigits,markup}).map(u=>({...u,q,size:q*72/101.6})));
+      cursor=m.index+m[0].length;
+    }
+    const rest=text.slice(cursor);
+    if(/\[Q=|\[\/Q\]/u.test(rest))throw new Error('級数の指定が閉じていません。段落ごとに [Q=40]文字[/Q] の形で囲んでください。');
+    result.push(...textUnits(rest,{combineDigits,markup}));return result;
+  }
   const chars=graphemes(text),units=[];
   for(let i=0;i<chars.length;){
     if(chars[i]==='｛'||chars[i]==='{'){
@@ -76,7 +91,18 @@ function punctuationReduction(left,right){
 }
 export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{font,size=SPEC.bodySize,pitch=SPEC.pitch,autoPunctuationSpace=false,lineRows}={}){
   const advances=new Map();
+  const unitSize=u=>u?.size??size;
+  const trim=(a,b)=>punctuationReduction(a,b)*Math.min(unitSize(a),unitSize(b))/pitch;
   const rowAdvance=unit=>{
+    if(unit.size){
+      let extent=unit.size;
+      if(unit.text===' ')extent*=.5;
+      else if(font&&(unit.kind==='sideways-digit'||(unit.kind==='normal'&&isSideways(unit.display)))){
+        const active=unit.italic&&font.italicFont?font.italicFont:font;
+        extent=glyphRun(active,unit.display,true).positions.reduce((n,p)=>n+p.xAdvance,0)*unit.size/active.unitsPerEm;
+      }
+      return (extent+Math.max(0,pitch-size))/pitch;
+    }
     if(unit.text===' ')return 0.5;
     if(!font||!(unit.kind==='sideways-digit'||(unit.kind==='normal'&&isSideways(unit.display))))return 1;
     const active=unit.italic&&font.italicFont?font.italicFont:font;
@@ -99,7 +125,7 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{f
       const add=next&&/[!?！？‼⁇⁈⁉]$/u.test(unit.text)&&!(/^[\s!?！？‼⁇⁈⁉]/u.test(next.text)||NO_START.has(next.text[0]))&&!(unit.ruby&&unit.ruby===next.ruby);
       return add?[unit,{text:'　',display:'　',kind:'normal',automaticSpace:true}]:[unit];
     });
-    if(indent&&!/^[ 　]/u.test(paragraph))chars.unshift({text:'　',display:'　',kind:'normal'});
+    if(indent&&!/^[ 　]/u.test(chars[0]?.text||''))chars.unshift({text:'　',display:'　',kind:'normal'});
     while(chars.length){
       while(chars[0]?.automaticSpace)chars.shift();
       if(!chars.length)break;
@@ -107,7 +133,7 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{f
       // Half-width spaces consume half a row; keep source characters intact.
       let end=0,used=0;
       while(end<chars.length){
-        const advance=rowAdvance(chars[end])-punctuationReduction(chars[end-1],chars[end])*size/pitch;
+        const advance=rowAdvance(chars[end])-trim(chars[end-1],chars[end]);
         if(used+advance>rows)break;
         used+=advance;end++;
       }
@@ -122,7 +148,7 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{f
         let total=0;
         for(let i=0;i<candidate.length-1;i++){
           const a=candidate[i],b=candidate[i+1];let capacity=0;
-          if(font&&!a.ruby&&!b.ruby&&!a.italic&&!b.italic&&a.kind==='normal'&&b.kind==='normal'&&!/\s/u.test(a.text+b.text)&&!isSideways(a.display)&&!isSideways(b.display)&&!punctuationReduction(a,b)){
+          if(font&&!a.q&&!b.q&&!a.ruby&&!b.ruby&&!a.italic&&!b.italic&&a.kind==='normal'&&b.kind==='normal'&&!/\s/u.test(a.text+b.text)&&!isSideways(a.display)&&!isSideways(b.display)&&!punctuationReduction(a,b)){
             const bounds=u=>{
               const pos=glyphPosition(font,{char:u.display,kind:u.kind,size,x:0,y:0});
               return {top:pos.baseline-Math.max(...pos.run.glyphs.map((g,n)=>g.bbox.maxY+pos.run.positions[n].yOffset))*pos.scale,
@@ -133,7 +159,7 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{f
           }
           capacities.push(capacity);total+=capacity;
         }
-        const occupied=candidate.reduce((sum,u,i)=>sum+rowAdvance(u)-punctuationReduction(candidate[i-1],u)*size/pitch,0);
+        const occupied=candidate.reduce((sum,u,i)=>sum+rowAdvance(u)-trim(candidate[i-1],u),0);
         const excess=Math.max(0,occupied-rows);
         if(excess<=total&&(!chars[target]||!NO_START.has(chars[target].text[0]))&&!(chars[target]?.ruby&&chars[target-1]?.ruby===chars[target].ruby)){
           end=target;tightening=capacities.map(c=>total?c*excess/total:0);
@@ -169,26 +195,42 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{f
         if(/[、。，．!?！？‼⁇⁈⁉]$/u.test(left.text)||(left.ruby&&left.ruby===right.ruby)||(wordUnit(left)&&wordUnit(right)))continue;
         gaps.push(i);
       }
-      const occupied=visible.reduce((sum,unit,index)=>sum+rowAdvance(unit)-punctuationReduction(visible[index-1],unit)*size/pitch,0);
+      const occupied=visible.reduce((sum,unit,index)=>sum+rowAdvance(unit)-trim(visible[index-1],unit),0);
       const extra=gaps.length?Math.max(0,rows-occupied)/gaps.length:0;
       const expandable=new Set(gaps);
+      const positionedSize=visible.some(u=>u.size);
       let rowOffset=0;
       lines.push(visible.map((unit,index)=>{
-        const positioned={...unit,rowOffset};
-        rowOffset+=(unit.text===' '?0.5:1)+(expandable.has(index)?extra:0)-(tightening?.[index]||0);
+        if(positionedSize)rowOffset-=trim(visible[index-1],unit);
+        const positioned={...unit,rowOffset,...(positionedSize?{positionedSize:true}:{})};
+        rowOffset+=(positionedSize?rowAdvance(unit):(unit.text===' '?0.5:1))+(expandable.has(index)?extra:0)-(tightening?.[index]||0);
         return positioned;
       }));
     }
   }
   return lines;
 }
-export function paginate({title='',author='',body='',indent=true,startSide='odd',combineDigits=true,autoPunctuationSpace=false,pageSettings,font}){
+export function bodyGeometry(pageSettings,body='',baseSize=22,basePitch=38){
+  const g=pageGeometry(pageSettings);
+  const maxSize=Math.max(baseSize,...Array.from(body.matchAll(/\[Q=([0-9]+(?:\.[0-9]+)?)\]/g),m=>Number(m[1])*72/101.6));
+  if(maxSize<=baseSize)return {...g,columnSize:baseSize};
+  const extra=maxSize-baseSize;
+  return {...g,columnSize:maxSize,linePitch:Math.max(basePitch,maxSize*1.5+5),
+    columns:Math.floor((g.width-g.inner-g.outer-maxSize)/(Math.max(basePitch,maxSize*1.5+5)))+1,
+    oddRight:g.oddRight-extra/2,evenRight:g.evenRight-extra/2,
+    rows:Math.max(1,Math.floor((g.bottom-g.top-Math.max(0,g.pitch-g.bodySize))/g.pitch))};
+}
+export function sizedCell(unit,baseSize,x){
+  const size=unit.size??baseSize;
+  return {size,x:x+(baseSize-size)/2,...(unit.size?{explicitSize:true}:{}),...(unit.positionedSize?{positionedSize:true}:{})};
+}
+export function paginate({title='',author='',body='',indent=true,startSide='odd',combineDigits=true,autoPunctuationSpace=false,pageSettings,font,geometryBody}){
   title=title.trim().normalize('NFC');author=author.trim().normalize('NFC');
   if(!body.trim())throw new Error('本文を入力してください。');
   if(graphemes(body).length>50000)throw new Error('本文は50,000字までにしてください。');
   if(prefaceLength(title)>54)throw new Error('作品タイトルは54字までにしてください。');
   if(prefaceLength(author)>18)throw new Error('作者名は18字までにしてください。');
-  const SPEC=pageGeometry(pageSettings);
+  const SPEC=bodyGeometry(pageSettings,geometryBody??body);
   if(SPEC.rows<4||SPEC.columns<4)throw new Error('本文を配置する範囲が狭すぎます。余白を減らしてください。');
   const titleRows=Math.min(27,Math.max(1,Math.floor((SPEC.bottom-SPEC.top-56.693)/26)));
   const titleChars=textUnits(title,{combineDigits}),authorChars=textUnits(author,{combineDigits});
@@ -205,7 +247,7 @@ export function paginate({title='',author='',body='',indent=true,startSide='odd'
     const odd=(index+(startSide==='even'?1:0))%2===0;
     const right=odd?SPEC.oddRight:SPEC.evenRight;
     const cells=[];
-    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:right-(col+offset)*SPEC.linePitch-SPEC.bodySize/2,y:SPEC.top+unit.rowOffset*SPEC.pitch,size:SPEC.bodySize,role:'body'})));
+    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:right-(col+offset)*SPEC.linePitch-SPEC.bodySize/2,y:SPEC.top+unit.rowOffset*SPEC.pitch,...sizedCell(unit,SPEC.bodySize,right-(col+offset)*SPEC.linePitch-SPEC.bodySize/2),role:'body'})));
     if(index===0){
       titleChars.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:right-Math.floor(n/titleRows)*SPEC.linePitch-13,y:SPEC.top+56.693+(n%titleRows)*26,size:26,role:'title'}));
       const authorX=right-25.8-(authorChars.some(u=>u.ruby)?12:0)-(titleColumns>1?SPEC.linePitch:0);
@@ -221,19 +263,21 @@ function paginateAfterwordLegacy({title='あとがき',author='',body='',indent=
   if(graphemes(body).length>50000)throw new Error('本文は50,000字までにしてください。');
   if(prefaceLength(title)>18)throw new Error('あとがきの見出しは18字までにしてください。');
   if(prefaceLength(author)>18)throw new Error('作者名は18字までにしてください。');
-  const rows=48,columns=9,bodySize=18,pitch=17,linePitch=34;
+  const rows=48,bodySize=18,pitch=17;
+  const maxSize=Math.max(bodySize,...textUnits(normalizeBody(body)).map(u=>u.size||0));
+  const linePitch=maxSize>bodySize?Math.max(34,maxSize*1.5+5):34,columns=Math.max(1,Math.floor((8*34)/linePitch)+1);
   const lines=breakLines(body,indent,combineDigits,rows,{font,size:bodySize,pitch,autoPunctuationSpace}),pages=[];
   const heading=textUnits(title,{combineDigits}),name=textUnits(author,{combineDigits});
   for(let cursor=0;cursor<lines.length;cursor+=columns){
     const index=pages.length,cells=[],pageLines=lines.slice(cursor,cursor+columns);
-    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-col*linePitch,y:130+unit.rowOffset*pitch,size:bodySize,role:'body'})));
+    pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-col*linePitch,y:130+unit.rowOffset*pitch,...sizedCell(unit,bodySize,500-col*linePitch),role:'body'})));
     heading.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:586,y:186+n*24,size:24,role:'title'}));
     if(cursor+columns>=lines.length)name.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-(pageLines.length+1)*linePitch,y:876-name.length*22+n*22,size:22,role:'author'}));
     pages.push({cells,lines:pageLines,index,side:(index+(startSide==='even'?1:0))%2?'even':'odd',layout:'afterword'});
   }
   return {title,author,body:normalizeBody(body),indent,startSide,combineDigits,pages:withRuby(pages,font)};
 }
-export function plainText(text){let result=normalizeBody(text);for(const m of rubyMatches(result).reverse())result=result.slice(0,m.index)+m[1]+result.slice(m.index+m[0].length);return result.replace(/\[\[([^\n]*?)\]\]/g,'$1').replace(/｛([^｛｝{}\n]+)｝|\{([^｛｝{}\n]+)\}/g,(_,wide,half)=>wide??half);}
+export function plainText(text){let result=normalizeBody(text).replace(/\[Q=[0-9]+(?:\.[0-9]+)?\]|\[\/Q\]/g,'');for(const m of rubyMatches(result).reverse())result=result.slice(0,m.index)+m[1]+result.slice(m.index+m[0].length);return result.replace(/\[\[([^\n]*?)\]\]/g,'$1').replace(/｛([^｛｝{}\n]+)｝|\{([^｛｝{}\n]+)\}/g,(_,wide,half)=>wide??half);}
 export function prefaceLength(text){return graphemes(plainText(text).replace(/\n/g,'')).length;}
 // Ruby uses ordinary positioned cells, so preview, PDF and WebP share one layout.
 export function withRuby(pages,font){
@@ -250,6 +294,7 @@ export function withRuby(pages,font){
     for(const cells of columns.values()){
       cells.sort((a,b)=>a.y-b.y);let saved=0,previous=null;
       for(const cell of cells){
+        if(cell.positionedSize){if(font&&(cell.kind==='sideways-digit'||(cell.kind==='normal'&&isSideways(cell.char))))cell.kind='sideways-tight';continue;}
         saved+=punctuationReduction(previous,cell)*cell.size;
         cell.y-=saved;previous=cell;
         if(font&&(cell.kind==='sideways-digit'||(cell.kind==='normal'&&isSideways(cell.char)))){
@@ -263,7 +308,7 @@ export function withRuby(pages,font){
   }
   // Reduce Gothic body glyphs around their centres; retain line/page geometry.
   if(font?.bodyScale&&font.bodyScale!==1)for(const page of pages)for(const cell of page.cells){
-    if(cell.role!=='body'&&cell.role!=='preface')continue;
+    if(cell.explicitSize||(cell.role!=='body'&&cell.role!=='preface'))continue;
     const oldSize=cell.size;cell.size*=font.bodyScale;
     cell.x+=(oldSize-cell.size)/2;cell.y+=(oldSize-cell.size)/2;
     if(cell.advance!==undefined)cell.advance*=font.bodyScale;
@@ -293,12 +338,14 @@ function paginateReaderLegacy({title='',author='',body='',preface='',indent=true
   const intro=breakLines(preface,false,combineDigits,32,{font,size:16,pitch:17,autoPunctuationSpace});
   if(intro.length>5)throw new Error('前書きの改行・空行を減らして、5行以内に収めてください。');
   const lines=breakLines(body,indent,combineDigits,SPEC.rows,{font,autoPunctuationSpace}),pages=[];
-  const add=(cells,unit,x,y,size,role)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x,y,size,role});
+  const maxSize=Math.max(22,...lines.flat().map(u=>u.size||0)),linePitch=maxSize>22?Math.max(38,maxSize*1.5+5):38;
+  const firstColumns=Math.max(1,Math.floor(6*38/linePitch)+1),columns=Math.max(1,Math.floor(14*38/linePitch)+1);
+  const add=(cells,unit,x,y,size,role)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x,y,size,...(role==='body'?sizedCell(unit,size,x):{}),role});
   for(let cursor=0;cursor<lines.length;){
     const index=pages.length,first=index===0,odd=(index+(startSide==='even'?1:0))%2===0;
-    const pageLines=lines.slice(cursor,cursor+(first?7:SPEC.columns));cursor+=pageLines.length;
+    const pageLines=lines.slice(cursor,cursor+(first?firstColumns:columns));cursor+=pageLines.length;
     const cells=[],right=first?330:(odd?SPEC.oddRight:SPEC.evenRight);
-    pageLines.forEach((line,col)=>line.forEach((u,row)=>add(cells,u,right-col*SPEC.linePitch-SPEC.bodySize/2,SPEC.top+u.rowOffset*SPEC.pitch,SPEC.bodySize,'body')));
+    pageLines.forEach((line,col)=>line.forEach((u,row)=>add(cells,u,right-col*linePitch-SPEC.bodySize/2,SPEC.top+u.rowOffset*SPEC.pitch,SPEC.bodySize,'body')));
     const page={cells,lines:pageLines,index,side:odd?'odd':'even',layout:'reader'};
     if(first){
       textUnits(title,{combineDigits}).forEach((u,n)=>add(cells,u,422,184+n*26,26,'title'));
@@ -462,4 +509,5 @@ export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=
 export function paginateAfterword(options){return fitTemplate(paginateAfterwordLegacy(options),options.pageSettings,options.startSide);}
 export function paginateReader(options){return fitTemplate(paginateReaderLegacy(options),options.pageSettings,options.startSide);}
 export function paginateToc(options){return fitTemplate(paginateTocLegacy(options),options.pageSettings,options.startSide);}
+
 
