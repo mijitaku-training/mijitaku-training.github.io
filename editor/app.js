@@ -210,6 +210,10 @@ function syncFontChoice(){
   const item=selectedItem(),choice=item?.fontChoice||'legacy';
   $('font-choice').value=choice==='legacy'?(currentFontName==='ZENオールド明朝'?'mincho':currentFontName==='ZEN角ゴシック Antique'?'gothic':'custom'):choice;
   $('italic-font-choice').value=item?.italicFont||'same';
+  const basePt=item?.layout==='afterword'?18:22;
+  const standardPt=basePt*($('font-choice').value==='gothic'?21/22:1);
+  $('standard-size-info').textContent='本文の標準：約'+(standardPt*101.6/72).toFixed(1)+'Q（'+(item?.layout==='afterword'?'あとがき・':'')+($('font-choice').value==='gothic'?'ゴシック':$('font-choice').value==='mincho'?'明朝':'読み込んだフォント')+'）';
+
   $('font-name').textContent='この作品の基本フォント：'+({mincho:'ZENオールド明朝',gothic:'ZEN角ゴシック Antique',custom:item?.fontData?.name||currentFontName}[$('font-choice').value]);
 }
 for(const id of ['font-choice','italic-font-choice'])$(id).addEventListener('change',async()=>{
@@ -690,5 +694,6 @@ renderEditor();renderList();init();
 inlineEditor=createInlineEditor({host:$('inline-image-host'),getItem:selectedItem,isBusy:()=>busy,changed:invalidate,getFrame:pic=>{saveCurrent();const item=selectedItem();const doc=buildBook([item],{font,resolveFont:resolveItemFont,startSide:$('start-side').value,pageSettings});return doc.pages[pic.page-1]?.images?.find(i=>i.clip)?.clip;}});
 inlineEditor.render();
 $('inline-image-panel').addEventListener('toggle',()=>{if($('inline-image-panel').open)inlineEditor.render();});
+
 
 
