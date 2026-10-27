@@ -42,9 +42,25 @@
         <div class="field body-field"><div class="label-row"><label for="body">本文</label><span id="char-count">0字</span></div><textarea id="body" placeholder="原稿をそのまま貼り付けてください。&#10;&#10;改行と空行は、誌面にも反映されます。" maxlength="50000" spellcheck="false"></textarea></div>
         <div class="combine-tools"><button id="combine-selection" type="button">組文字にする</button><button id="uncombine-selection" type="button">組文字を解除</button><button id="ruby-selection" type="button">ルビを付ける</button><button id="unruby-selection" type="button">ルビを解除</button></div>
         <div class="combine-tools" id="size-tools"><label for="selection-size">選択部分の級数（Q）</label><p id="standard-size-info" aria-live="polite" style="grid-column:1/-1;margin:0;font-size:14px;color:var(--muted);line-height:1.6">本文の標準：約31.0Q（明朝）</p><input id="selection-size" type="number" min="8" max="64" step="0.5" value="40" inputmode="decimal"><button type="button" id="size-selection">級数を適用</button><button type="button" id="unsize-selection">本文の標準サイズに戻す</button></div>
-        <p class="hint">本文を選択して級数を指定できます。8〜64Q（1Q＝0.25mm）。入力欄には [Q=40]文字[/Q] と表示され、誌面には文字だけが出ます。大きい文字を入れると、その作品の行間とページ数も変わります。</p>
-        <p class="combine-help">斜体は半角の {文字} で囲んで指定します。括弧は誌面に出ません。{《きみ《あなた》》}・{[[12]]} のようにルビや組文字も囲めます（読み仮名は通常のまま）。改行する場合は行ごとに囲んでください。従来の全角 ｛文字｝ も使えます。開き括弧と閉じ括弧は半角・全角を揃えてください。</p>
-        <p class="combine-help">ルビは文字を選択して「ルビを付ける」を押し、読み仮名を入力します。《きみ《あなた》》と直接入力するだけでもルビを付けられます。漢字以外にも使えます。従来の｜きみ《あなた》にも対応しています。変更・解除は指定内にカーソルを置いて押してください。<br>各入力欄の1〜4文字を選択して「組文字にする」。[[km]] のように囲むと、1文字分の枠に横並びで入ります。解除は囲んだ部分にカーソルを置いて押してください。</p>
+        <details class="settings" id="text-format-help">
+          <summary>文字の装飾・指定方法</summary>
+          <div class="settings-content">
+            <p>入力欄の指定記号は誌面には出ません。変更後は「縦書きで確認」を押してください。</p>
+            <h3>級数（文字サイズ）</h3>
+            <p>本文を選択し、級数を入力して「級数を適用」を押します。8〜64Qで指定でき、1Qは0.25mmです。標準の級数は設定欄の下に表示されます。</p>
+            <p>入力例：<code>[Q=40]文字[/Q]</code><br>元に戻すには、対象を選択するか指定内にカーソルを置いて「本文の標準サイズに戻す」を押します。大きい文字を入れると、その作品の行間やページ数も変わります。</p>
+            <h3>斜体</h3>
+            <p>半角の波括弧で <code>{文字}</code> と囲みます。フォントは「組み方・フォント」で指定できます。</p>
+            <p>ルビや組文字も <code>{《きみ《あなた》》}</code>・<code>{[[12]]}</code> のように囲めます。読み仮名は斜体になりません。改行する場合は行ごとに囲んでください。</p>
+            <p>従来の全角 <code>｛文字｝</code> も使えます。開き括弧と閉じ括弧の半角・全角を揃えてください。</p>
+            <h3>ルビ（読み仮名）</h3>
+            <p>文字を選択して「ルビを付ける」を押し、読み仮名を入力します。漢字以外にも使えます。</p>
+            <p>直接入力：<code>《きみ《あなた》》</code><br>従来の <code>｜きみ《あなた》</code> も使えます。変更・解除は指定内にカーソルを置き、「ルビを付ける」または「ルビを解除」を押してください。</p>
+            <h3>組文字（縦中横）</h3>
+            <p>各入力欄で1〜4文字を選択し、「組文字にする」を押します。1文字分の枠に横並びで入ります。</p>
+            <p>直接入力：<code>[[km]]</code><br>解除は指定内にカーソルを置いて「組文字を解除」を押します。2桁の数字の自動処理は「組み方・フォント」で切り替えられます。</p>
+          </div>
+        </details>
         <details id="inline-image-panel"><summary>本文内の画像・トリミング</summary><div id="inline-image-host"></div></details>
         <div class="form-actions"><button type="submit" class="primary" id="preview-button">縦書きで確認</button><button type="button" class="quiet" id="sample-button">試しの原稿を入れる</button></div>
         <details class="settings"><summary>組み方・フォント</summary><div class="settings-content">
@@ -145,6 +161,7 @@
   <footer><span>月刊 身仕度</span><a href="assets/font-license.txt" target="_blank" rel="noopener">フォントのライセンス</a></footer>
 </body>
 </html>
+
 
 
 
