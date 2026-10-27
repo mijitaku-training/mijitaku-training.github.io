@@ -1,5 +1,6 @@
+import {paginateWithImages} from './inline-layout.js?v=50';
 import {pageGeometry} from './page-settings.js?v=21';
-import {SPEC,paginate,paginateAfterword,paginateReader,paginateToc,missingCharacters} from './layout.js?v=49';
+import {SPEC,paginate,paginateAfterword,paginateReader,paginateToc,missingCharacters} from './layout.js?v=50';
 
 export function imagePlacement(width,height,fit='contain',SPEC=pageGeometry()){
   if(!Number.isFinite(width)||!Number.isFinite(height)||width<=0||height<=0)throw new Error('画像の大きさを読み取れませんでした。');
@@ -18,7 +19,7 @@ export function buildBook(items,{font,resolveFont,startSide='odd',title='身仕�
       pages.push({width:geometry.width,height:geometry.height,kind:'blank',cells:[],index:pages.length,itemId:item.id,itemTitle:'白紙ページ',itemPage:1});
     }else if(item.kind==='text'||item.kind==='toc'){
       const itemFont=resolveFont?resolveFont(item):font;
-      let doc;try{doc=(item.kind==='toc'?paginateToc:item.layout==='reader'?paginateReader:item.layout==='afterword'?paginateAfterword:paginate)({...item,font:itemFont,pageSettings:effective,startSide:(start+(startSide==='even'?1:0))%2?'even':'odd'});}catch(error){throw new Error(`${number+1}番目「${itemTitle}」：${error.message}`);}
+      let doc;try{doc=(item.kind==='toc'?paginateToc:item.layout==='reader'?paginateReader:item.layout==='afterword'?paginateAfterword:item.inlineImages?.length?paginateWithImages:paginate)({...item,font:itemFont,pageSettings:effective,startSide:(start+(startSide==='even'?1:0))%2?'even':'odd'});}catch(error){throw new Error(`${number+1}番目「${itemTitle}」：${error.message}`);}
       if(itemFont){const missing=missingCharacters(doc,itemFont);if(missing.length)throw new Error(`「${itemTitle}」のフォントにない文字：${missing.slice(0,12).join(' ')}。文字かフォントを変更してください。`);}
       for(const p of doc.pages)pages.push({...p,font:itemFont,index:pages.length,itemId:item.id,itemTitle,itemPage:p.index+1});
     }else if(item.kind==='pdf'){
@@ -65,4 +66,5 @@ export async function readImageFile(file){
     return {data:canvas.toDataURL('image/jpeg',.94),width,height,name:file.name};
   }finally{URL.revokeObjectURL(url);}
 }
+
 

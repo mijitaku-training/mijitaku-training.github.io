@@ -74,7 +74,7 @@ function punctuationReduction(left,right){
   if((a==='　'&&open(b))||(close(a)&&b==='　'))return 0.5;
   return 0;
 }
-export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{font,size=SPEC.bodySize,pitch=SPEC.pitch,autoPunctuationSpace=false}={}){
+export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{font,size=SPEC.bodySize,pitch=SPEC.pitch,autoPunctuationSpace=false,lineRows}={}){
   const advances=new Map();
   const rowAdvance=unit=>{
     if(unit.text===' ')return 0.5;
@@ -103,6 +103,7 @@ export function breakLines(text,indent=true,combineDigits=true,rows=SPEC.rows,{f
     while(chars.length){
       while(chars[0]?.automaticSpace)chars.shift();
       if(!chars.length)break;
+      if(lineRows)rows=lineRows(lines.length);
       // Half-width spaces consume half a row; keep source characters intact.
       let end=0,used=0;
       while(end<chars.length){
@@ -235,7 +236,7 @@ function paginateAfterwordLegacy({title='あとがき',author='',body='',indent=
 export function plainText(text){let result=normalizeBody(text);for(const m of rubyMatches(result).reverse())result=result.slice(0,m.index)+m[1]+result.slice(m.index+m[0].length);return result.replace(/\[\[([^\n]*?)\]\]/g,'$1').replace(/｛([^｛｝{}\n]+)｝|\{([^｛｝{}\n]+)\}/g,(_,wide,half)=>wide??half);}
 export function prefaceLength(text){return graphemes(plainText(text).replace(/\n/g,'')).length;}
 // Ruby uses ordinary positioned cells, so preview, PDF and WebP share one layout.
-function withRuby(pages,font){
+export function withRuby(pages,font){
   // Use the selected font's horizontal advance for sideways Latin letters.
   // Keep explicit spaces, column breaks and bottom-aligned author names intact.
   for(const page of pages){
@@ -348,14 +349,14 @@ export function fontText(font,text){
 export function glyphRun(font,char,horizontal=false){return font.layout(fontText(font,char),horizontal?HORIZONTAL_FEATURES:['vert','vrt2']);}
 export function glyphPosition(font,cell){
   font=cell.italic&&font.italicFont?font.italicFont:font;
-  const combined=cell.kind==='tcy';
-  const sideways=cell.kind==='sideways-digit'||cell.kind==='sideways-tight'||(!combined&&cell.kind!=='upright'&&isSideways(cell.char)),run=glyphRun(font,cell.char,combined||sideways);
+  const combined=cell.kind==='tcy',caption=cell.kind==='caption';
+  const sideways=!caption&&(cell.kind==='sideways-digit'||cell.kind==='sideways-tight'||(!combined&&cell.kind!=='upright'&&isSideways(cell.char))),run=glyphRun(font,cell.char,caption||combined||sideways);
   let fontSize=cell.size;
   const advance=run.positions.reduce((n,p)=>n+p.xAdvance,0);
   if(combined)fontSize*=Math.min(1, font.unitsPerEm/Math.max(advance,1));
   const scale=fontSize/font.unitsPerEm;
   const width=run.positions.reduce((n,p)=>n+p.xAdvance,0)*scale;
-  const pad=cell.kind==='sideways-tight'?0:(cell.size-width)/2;
+  const pad=caption||cell.kind==='sideways-tight'?0:(cell.size-width)/2;
   let baseline=cell.y+cell.size*.88;
   if(combined){
     const minY=Math.min(...run.glyphs.map((g,i)=>g.bbox.minY+run.positions[i].yOffset));
@@ -391,7 +392,7 @@ export function pageSvg(page,font,{grid=false,label='誌面プレビュー'}={})
     const shapes=sideways?`<g transform="rotate(90 ${cell.x+cell.size/2} ${cell.y+cell.size/2})">${parts.join('')}</g>`:parts.join('');
     uses.push(cell.italic?`<g transform="matrix(${italicMatrix(cell,font).join(' ')})">${shapes}</g>`:shapes);
   }
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SPEC.width} ${SPEC.height}" role="img" aria-label="${xml(label)}"><title>${xml(label)}</title><rect width="100%" height="100%" fill="white"/><defs>${Array.from(definitions.values(),({id,path:d})=>`<path id="${id}" d="${xml(d)}"/>`).join('')}</defs><g fill="#111111">${uses.join('')}</g>${(page.images||[]).map(r=>`<image href="${r.data}" x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}"/>`).join('')}${(page.rules||[]).map(r=>`<rect x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" fill="${r.color}"/>`).join('')}</svg>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SPEC.width} ${SPEC.height}" role="img" aria-label="${xml(label)}"><title>${xml(label)}</title><rect width="100%" height="100%" fill="white"/><defs>${Array.from(definitions.values(),({id,path:d})=>`<path id="${id}" d="${xml(d)}"/>`).join('')}</defs><g fill="#111111">${uses.join('')}</g>${(page.images||[]).map((r,i)=>{const id=glyphPrefix+'clip'+i,c=r.clip;return `${c?`<defs><clipPath id="${id}"><rect x="${c.x}" y="${c.y}" width="${c.width}" height="${c.height}"/></clipPath></defs>`:''}<image ${c?`clip-path="url(#${id})"`:''} href="${r.data}" x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}"/>`;}).join('')}${(page.rules||[]).map(r=>`<rect x="${r.x}" y="${r.y}" width="${r.width}" height="${r.height}" fill="${r.color}"/>`).join('')}</svg>`;
 }
 export function missingCharacters(doc,font){
   return Array.from(new Set(doc.pages.flatMap(p=>p.cells).filter(c=>glyphPosition(font,c).run.glyphs.some(g=>g.id===0)).map(c=>c.source||c.char)));
@@ -426,11 +427,11 @@ export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=
       out.drawImage(img,{x:r.x,y:SPEC.height-r.y-r.height,width:r.width,height:r.height});
       if(page.clip)out.pushOperators(PDFLib.popGraphicsState());
     }
-    for(const r of page.images||[]){const img=await (/^data:image\/png[;,]/i.test(r.data)?pdf.embedPng(r.data):pdf.embedJpg(r.data));out.drawImage(img,{x:r.x,y:SPEC.height-r.y-r.height,width:r.width,height:r.height});}
+    for(const r of page.images||[]){const img=await (/^data:image\/png[;,]/i.test(r.data)?pdf.embedPng(r.data):pdf.embedJpg(r.data));if(r.clip){const c=r.clip;out.pushOperators(PDFLib.pushGraphicsState(),PDFLib.rectangle(c.x,SPEC.height-c.y-c.height,c.width,c.height),PDFLib.clip(),PDFLib.endPath());}out.drawImage(img,{x:r.x,y:SPEC.height-r.y-r.height,width:r.width,height:r.height});if(r.clip)out.pushOperators(PDFLib.popGraphicsState());}
     for(const r of page.rules||[])out.drawRectangle({x:r.x,y:SPEC.height-r.y-r.height,width:r.width,height:r.height,color:rgb(...[1,3,5].map(i=>parseInt(r.color.slice(i,i+2),16)/255))});
     for(const cell of page.cells||[]){
       const selected=page.font||font,active=cell.italic&&selected.italicFont?selected.italicFont:selected;
-      const pos=glyphPosition(selected,cell),drawFont=await embedded(active,pos.sideways||pos.combined);
+      const pos=glyphPosition(selected,cell),drawFont=await embedded(active,pos.sideways||pos.combined||cell.kind==='caption');
       if(cell.italic){const [a,b,c,d,e,f]=italicMatrix(cell,selected);out.pushOperators(PDFLib.pushGraphicsState(),PDFLib.concatTransformationMatrix(a,-b,-c,d,c*SPEC.height+e,SPEC.height*(1-d)-f));}
       out.drawText(fontText(active,cell.char),{font:drawFont,size:pos.fontSize,color:rgb(.067,.067,.067),x:pos.sideways?cell.x+cell.size*.12:cell.x+pos.pad,y:pos.sideways?SPEC.height-cell.y-pos.pad:SPEC.height-pos.baseline,rotate:degrees(pos.sideways?-90:0)});
       if(cell.italic)out.pushOperators(PDFLib.popGraphicsState());
@@ -461,3 +462,4 @@ export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=
 export function paginateAfterword(options){return fitTemplate(paginateAfterwordLegacy(options),options.pageSettings,options.startSide);}
 export function paginateReader(options){return fitTemplate(paginateReaderLegacy(options),options.pageSettings,options.startSide);}
 export function paginateToc(options){return fitTemplate(paginateTocLegacy(options),options.pageSettings,options.startSide);}
+

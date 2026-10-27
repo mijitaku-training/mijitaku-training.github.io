@@ -64,6 +64,16 @@ export function validateProject(input){
     let pdfRatio;
     if(i.pdfRatio){const r=normalizePageSettings(i.pdfRatio);pdfRatio={mode:r.mode,ratioWidth:r.ratioWidth,ratioHeight:r.ratioHeight};}
     if(i.kind==='blank')return {...setting,id,kind:'blank',title:'白紙ページ'};
+    if(i.inlineImages!==undefined){
+      if(!Array.isArray(i.inlineImages)||i.inlineImages.length>20)fail();
+      setting.inlineImages=i.inlineImages.map(p=>{
+        if(!p||!Number.isInteger(p.page)||p.page<1||p.page>300||!['top-right','top-left','bottom-right','bottom-left','right','left','full'].includes(p.position))fail();
+        const im=p.image,c=p.crop;if(!im||!Number.isInteger(im.width)||!Number.isInteger(im.height)||im.width<1||im.height<1||im.width>2400||im.height>2400)fail();
+        const data=str(im.data,40000000);if(!/^data:image\/jpeg;base64,[A-Za-z0-9+/]+={0,2}$/.test(data))fail();
+        if(!c||!Number.isFinite(c.zoom)||c.zoom<1||c.zoom>5||!Number.isFinite(c.x)||c.x<0||c.x>1||!Number.isFinite(c.y)||c.y<0||c.y>1)fail();
+        return {id:str(p.id,100),page:p.page,position:p.position,above:str(p.above||'',200),below:str(p.below||'',200),crop:{zoom:c.zoom,x:c.x,y:c.y},image:{data,width:im.width,height:im.height,name:str(im.name,500)}};
+      });
+    }
     if(i.kind==='text'){
       if(i.layout&&!['afterword','reader'].includes(i.layout))fail();
       return {...setting,id,kind:'text',title,author:str(i.author,1000),body:str(i.body,200000),preface:str(i.preface||'',2000),indent:i.indent!==false,combineDigits:i.combineDigits!==false,autoPunctuationSpace:i.autoPunctuationSpace===true,...(i.layout?{layout:i.layout}:{})};
@@ -96,3 +106,4 @@ export function validateProject(input){
   if(input.font){const data=str(input.font.data,28000000);if(!/^[A-Za-z0-9+/]+={0,2}$/.test(data))fail();font={name:str(input.font.name,500),data};}
   return makeProject({pageSettings:normalizePageSettings(input.pageSettings),items,selectedId:seen.has(input.selectedId)?input.selectedId:items[0].id,startSide:input.startSide==='even'?'even':'odd',pdfName:str(input.pdfName||'',200),font});
 }
+

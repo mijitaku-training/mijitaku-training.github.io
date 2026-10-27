@@ -1,8 +1,9 @@
+import {createInlineEditor} from './inline-editor.js?v=50';
 import {DEFAULT_PAGE_SETTINGS,normalizePageSettings,pageGeometry,applyPageSettings} from './page-settings.js?v=21';
-import {saveDraft,readDraft,readRecovery,readBackupAction,saveBackupAction,commitRestoration,backupFilename,makeProject,validateProject,bytesToBase64,base64ToBytes} from './storage.js?v=45';
-import {createWebZip} from './web-export.js?v=39';
-import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=49';
-import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=49';
+import {saveDraft,readDraft,readRecovery,readBackupAction,saveBackupAction,commitRestoration,backupFilename,makeProject,validateProject,bytesToBase64,base64ToBytes} from './storage.js?v=50';
+import {createWebZip} from './web-export.js?v=50';
+import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=50';
+import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=50';
 import {readPdfFile,restorePdfSizes} from './pdf-import.js?v=21';
 const $=id=>document.getElementById(id);
 let font,fontBytes,proof,currentPage=0,busy=false,objectUrl,revision=0,pdfFile,sharing=false,pdfOutput=null;
@@ -91,6 +92,7 @@ function renderList(){
   });
   $('preview-button').textContent=items.length>1?'並び順で確認':'縦書きで確認';
 }
+let inlineEditor;
 function renderEditor(){
   closePageSettings();syncFontChoice();
   const item=selectedItem();const image=item?.kind==='image',toc=item?.kind==='toc',pdf=item?.kind==='pdf',blank=item?.kind==='blank';$('manuscript-form').hidden=image||toc||pdf||blank;$('blank-editor').hidden=!blank;$('image-editor').hidden=!image;$('toc-editor').hidden=!toc;$('pdf-editor').hidden=!pdf;if(toc)renderToc();
@@ -103,6 +105,7 @@ function renderEditor(){
   if(image){$('image-title').value=item.title;$('image-fit').value=item.fit;$('image-description').textContent=`${item.image.name}・${item.image.width} × ${item.image.height}px。1枚を1ページにします。`;}
   else if(item?.kind==='text'){for(const id of ['title','author','body'])$(id).value=item[id];$('indent').checked=item.indent;$('combine-digits').checked=item.combineDigits;if($('punctuation-space'))$('punctuation-space').checked=item.autoPunctuationSpace===true;}
   $('char-count').textContent=image?'':graphemes(plainText($('body').value||'').replace(/\s/g,'')).length.toLocaleString('ja')+'字';
+  inlineEditor?.render();
 }
 function selectItem(id){saveCurrent();selectedId=id;scheduleDraft();renderEditor();renderList();if(proof){const index=proof.pages.findIndex(p=>p.itemId===id);if(index>=0){currentPage=index;showPage();}}}
 function message(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
@@ -666,3 +669,8 @@ if(modelContext?.registerTool){
 }
 renderEditor();renderList();init();
 
+
+
+inlineEditor=createInlineEditor({host:$('inline-image-host'),getItem:selectedItem,isBusy:()=>busy,changed:invalidate,getFrame:pic=>{saveCurrent();const item=selectedItem();const doc=buildBook([item],{font,resolveFont:resolveItemFont,startSide:$('start-side').value,pageSettings});return doc.pages[pic.page-1]?.images?.find(i=>i.clip)?.clip;}});
+inlineEditor.render();
+$('inline-image-panel').addEventListener('toggle',()=>{if($('inline-image-panel').open)inlineEditor.render();});

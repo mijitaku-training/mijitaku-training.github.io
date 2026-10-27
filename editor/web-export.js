@@ -1,4 +1,4 @@
-import {SPEC,glyphPosition,italicMatrix} from './layout.js?v=39';
+import {SPEC,glyphPosition,italicMatrix} from './layout.js?v=50';
 const crcTable=Uint32Array.from({length:256},(_,n)=>{for(let k=0;k<8;k++)n=n&1?0xedb88320^(n>>>1):n>>>1;return n>>>0;});
 function crc32(bytes){let crc=0xffffffff;for(const b of bytes)crc=crcTable[(crc^b)&255]^(crc>>>8);return (crc^0xffffffff)>>>0;}
 export function pageFilename(index){return `p-${String(index+1).padStart(2,'0')}.webp`;}
@@ -42,7 +42,7 @@ export async function renderWebp(page,font){
     }
     for(const r of page.images||[]){
       const img=new Image();await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error('ロゴを読み込めませんでした。'));img.src=r.data;});
-      ctx.drawImage(img,r.x,r.y,r.width,r.height);
+      ctx.save();if(r.clip){const c=r.clip;ctx.beginPath();ctx.rect(c.x,c.y,c.width,c.height);ctx.clip();}ctx.drawImage(img,r.x,r.y,r.width,r.height);ctx.restore();
     }
     for(const r of page.rules||[]){ctx.fillStyle=r.color;ctx.fillRect(r.x,r.y,r.width,r.height);}
     const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/webp',.92));
@@ -61,3 +61,4 @@ export async function createWebZip(doc,font,onProgress=()=>{},check=()=>{}){
   }
   return makeZip(files);
 }
+
