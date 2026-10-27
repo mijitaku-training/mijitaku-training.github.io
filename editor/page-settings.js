@@ -22,7 +22,7 @@ export function fitTemplate(doc,value,startSide='odd'){
   const g=pageGeometry(value),d=DEFAULT_PAGE_SETTINGS,s=g.settings;
   for(const [i,page] of doc.pages.entries()){
     const odd=(i+(startSide==='even'?1:0))%2===0;
-    const blocks=[...page.cells.map(c=>({x:c.x,y:c.y,width:c.size,height:c.size})),...(page.images||[]),...(page.rules||[])];
+    const blocks=[...page.cells.map(c=>({x:c.x,y:c.y,width:c.size,height:c.size})),...(page.images||[]).map(b=>b.clip||b),...(page.rules||[]),...(page.layoutBounds?[page.layoutBounds]:[])];
     if(!blocks.length)continue;
     const left=Math.min(...blocks.map(b=>b.x)),right=Math.max(...blocks.map(b=>b.x+b.width)),top=Math.min(...blocks.map(b=>b.y)),bottom=Math.max(...blocks.map(b=>b.y+b.height));
     const x1=Math.max(0,left+g.width*((odd?s.outer:s.inner)-(odd?d.outer:d.inner))/100);
@@ -33,8 +33,12 @@ export function fitTemplate(doc,value,startSide='odd'){
     const scale=Math.min((x2-x1)/(right-left),(y2-y1)/(bottom-top));
     const dx=x1+(x2-x1-(right-left)*scale)/2,dy=y1+(y2-y1-(bottom-top)*scale)/2;
     for(const c of page.cells){c.x=dx+(c.x-left)*scale;c.y=dy+(c.y-top)*scale;c.size*=scale;}
-    for(const b of [...(page.images||[]),...(page.rules||[])]){b.x=dx+(b.x-left)*scale;b.y=dy+(b.y-top)*scale;b.width*=scale;b.height*=scale;}
+    for(const b of [...(page.images||[]),...(page.rules||[])]){
+      if(b.clip){const c=b.clip;b.clip={x:dx+(c.x-left)*scale,y:dy+(c.y-top)*scale,width:c.width*scale,height:c.height*scale};}
+      b.x=dx+(b.x-left)*scale;b.y=dy+(b.y-top)*scale;b.width*=scale;b.height*=scale;
+    }
     Object.assign(page,{width:g.width,height:g.height,side:odd?'odd':'even'});
+    delete page.layoutBounds;
   }
   return doc;
 }
@@ -48,3 +52,4 @@ export function applyPageSettings(items,{scope,selectedId,settings}){
     ? {...item,pdfRatio:{mode:value.mode,ratioWidth:value.ratioWidth,ratioHeight:value.ratioHeight}}
     : {...item,pageSettings:{...value}});
 }
+

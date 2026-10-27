@@ -1,5 +1,5 @@
-import {pageGeometry} from './page-settings.js?v=21';
-import {paginate,breakLines,withRuby,glyphRun,graphemes,bodyGeometry,sizedCell,lineInsets} from './layout.js?v=55';
+import {pageGeometry,fitTemplate} from './page-settings.js?v=57';
+import {paginate,paginateReader,paginateReaderTemplate,breakLines,withRuby,glyphRun,graphemes,bodyGeometry,sizedCell,lineInsets} from './layout.js?v=57';
 export const placements=[['top-right','右上'],['top-left','左上'],['bottom-right','右下'],['bottom-left','左下'],['right','右半分'],['left','左半分'],['full','フルページ']];
 export function cropPlacement(image,frame,crop={}){
   const zoom=Math.max(.1,Math.min(5,Number(crop.zoom)||1));
@@ -21,26 +21,37 @@ function caption(text,width,font,size=13){
 }
 export function paginateWithImages(options){
   const pictures=options.inlineImages||[];
-  if(!pictures.length)return paginate(options);
-  const g=bodyGeometry(options.pageSettings,options.body),seed=paginate({...options,body:'あ',geometryBody:options.body}),header=seed.pages[0].cells.filter(c=>c.role!=='body');
+  const reader=options.layout==='reader';
+  if(!pictures.length)return (reader?paginateReader:paginate)(options);
+  const g=bodyGeometry(reader?undefined:options.pageSettings,options.body);
+  // Reader pages keep their original template coordinates until the complete
+  // page (text, logo, captions and image clips) is fitted to the page settings.
+  const seed=reader?paginateReaderTemplate(options):paginate({...options,body:'あ',geometryBody:options.body}),header=seed.pages[0].cells.filter(c=>c.role!=='body');
   const pages=[],slots=[],frames=[],maxPage=Math.max(...pictures.map(p=>p.page));
   if(maxPage>300)throw new Error('画像のページは300以内にしてください。');
   if(new Set(pictures.map(p=>p.page)).size!==pictures.length)throw new Error('本文内画像は1ページに1枚です。ページ番号を分けてください。');
   let firstTextIndex=0;while(pictures.some(p=>p.page===firstTextIndex+1&&p.position==='full'))firstTextIndex++;
   function addPage(){
     const index=pages.length;if(index>=300)throw new Error('300ページ以内にしてください。');
-    const odd=(index+(options.startSide==='even'?1:0))%2===0,right=odd?g.oddRight:g.evenRight;
-    const page={index,width:g.width,height:g.height,side:odd?'odd':'even',cells:[],images:[]};pages.push(page);
-    const pic=pictures.find(p=>p.page===index+1),reserve=index===firstTextIndex?seed.pages[0].offset:0;
+    const odd=(index+(options.startSide==='even'?1:0))%2===0,first=index===firstTextIndex;
+    const right=reader&&first?330:odd?g.oddRight:g.evenRight,columns=reader&&first?7:g.columns;
+    const page={index,width:g.width,height:g.height,side:odd?'odd':'even',cells:[],images:[],...(reader?{layout:'reader'}:{})};pages.push(page);
+    // Use the full text area when fitting reader pages, including a short last
+    // page. Image wrapping must not make the page's margin transform unstable.
+    if(reader)page.layoutBounds={x:right-(columns-1)*g.linePitch-g.bodySize/2,y:g.top,width:(columns-1)*g.linePitch+g.bodySize,height:(g.rows-1)*g.pitch+g.bodySize};
+    const pic=pictures.find(p=>p.page===index+1),reserve=!reader&&first?seed.pages[0].offset:0;
     // On a full image first page the heading is moved to the next text page.
-    if(index===firstTextIndex){const dx=right-(options.startSide==='even'?g.evenRight:g.oddRight);page.cells.push(...header.map(c=>({...c,x:c.x+dx})));}
+    if(first){
+      const dx=reader?0:right-(options.startSide==='even'?g.evenRight:g.oddRight);page.cells.push(...header.map(c=>({...c,x:c.x+dx})));
+      if(reader){page.images.push(...(seed.pages[0].images||[]).map(i=>({...i})));page.rules=(seed.pages[0].rules||[]).map(r=>({...r}));}
+    }
     let box;
     if(pic){
       const full=pic.position==='full',half=['left','right'].includes(pic.position),left=pic.position.includes('left');
-      const columns=g.columns-reserve;if(columns<4)throw new Error('画像を入れる本文幅が足りません。タイトルか余白を調整してください。');
-      const xRight=right-reserve*g.linePitch+g.bodySize/2,xLeft=right-(g.columns-1)*g.linePitch-g.bodySize/2;
+      const availableColumns=columns-reserve;if(availableColumns<4)throw new Error('画像を入れる本文幅が足りません。タイトルか余白を調整してください。');
+      const xRight=right-reserve*g.linePitch+g.bodySize/2,xLeft=right-(columns-1)*g.linePitch-g.bodySize/2;
       const width=xRight-xLeft,height=(g.rows-1)*g.pitch+g.bodySize;
-      const imageColumns=Math.floor(columns/2),blockWidth=(imageColumns-1)*g.linePitch+g.bodySize;
+      const imageColumns=Math.floor(availableColumns/2),blockWidth=(imageColumns-1)*g.linePitch+g.bodySize;
       box={x:full?xLeft:left?xLeft:xRight-blockWidth,y:g.top,width:full?width:blockWidth,height:full||half?height:Math.floor(g.rows/2)*g.pitch};
       if(pic.position.startsWith('bottom'))box.y=g.top+height-box.height;
       // Shape the image frame independently from its page placement.
@@ -71,7 +82,7 @@ export function paginateWithImages(options){
         page.cells.push({char:text,source:text,kind:'caption',role:'caption',x:frame.x+shift,y:captionY+n*17,size:13});
       });
     }
-    frames.push({page,right,reserve,box,full:pic?.position==='full',previous:null});
+    frames.push({page,right,columns,reserve,box,full:pic?.position==='full',previous:null});
   }
   let pageIndex=0,pending=null;
   function locate(inset){
@@ -79,9 +90,9 @@ export function paginateWithImages(options){
       if(!frames[pageIndex])addPage();
       const frame=frames[pageIndex];
       if(frame.full){pageIndex++;continue;}
-      const {page,right,reserve,box,previous}=frame;
+      const {page,right,columns,reserve,box,previous}=frame;
       let centre=previous?previous.centre-g.linePitch-previous.inset.left-inset.right:right-reserve*g.linePitch-inset.right;
-      const left=right-(g.columns-1)*g.linePitch-g.bodySize/2;
+      const left=right-(columns-1)*g.linePitch-g.bodySize/2;
       while(centre-g.bodySize/2-inset.left>=left-1e-6){
         const x=centre-g.bodySize/2;let top=g.top,rows=g.rows;
         if(box&&x-inset.left<box.x+box.width&&x+g.bodySize+inset.right>box.x){
@@ -109,8 +120,10 @@ export function paginateWithImages(options){
   while(pages.length<maxPage){if(pages.length+1<maxPage&&!pictures.some(p=>p.page===pages.length+1))throw new Error('指定ページまで本文がありません。画像のページ番号を小さくしてください。');addPage();}
   // Header has already passed through withRuby in the seed.
   for(const page of pages){const fixed=page.cells.filter(c=>c.role!=='body');page.cells=page.cells.filter(c=>c.role==='body');withRuby([page],options.font);page.cells.push(...fixed);}
-  return {...seed,pages,body:options.body};
+  const doc={...seed,pages,body:options.body};
+  return reader?fitTemplate(doc,options.pageSettings,options.startSide):doc;
 }
+
 
 
 

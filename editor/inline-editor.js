@@ -1,5 +1,5 @@
-import {placements,cropPlacement} from './inline-layout.js?v=56';
-import {readImageFile} from './book.js?v=56';
+import {placements,cropPlacement} from './inline-layout.js?v=57';
+import {readImageFile} from './book.js?v=57';
 export function createInlineEditor({host,getItem,changed,getFrame,isBusy}){
  const make=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e;};
  const heading=make('h3','本文内の画像'),help=make('p','作品内のページ番号を指定します。1ページに1枚。画像の上下に横書きの注釈を付けられます。'),add=make('button','＋ 本文内に画像を追加'),file=make('input'),list=make('div');
@@ -9,7 +9,8 @@ export function createInlineEditor({host,getItem,changed,getFrame,isBusy}){
  let observers=[];
  function render(){
   observers.forEach(o=>o.disconnect());observers=[];
-  const item=getItem();host.hidden=item?.kind!=='text'||!!item.layout;host.parentElement.hidden=host.hidden;list.replaceChildren();if(host.hidden)return;
+  const item=getItem();host.hidden=item?.kind!=='text'||!!item.layout&&item.layout!=='reader';host.parentElement.hidden=host.hidden;list.replaceChildren();if(host.hidden)return;
+  help.textContent='作品内のページ番号を指定します。1ページに1枚。画像の上下に横書きの注釈を付けられます。'+(item.layout==='reader'?' 読者寄稿の最初の本文ページは、ロゴ・前書き・タイトルを避けた本文欄に配置します。フルページの場合は、ロゴ・前書き・タイトルと本文を後ろのページへ送ります。':'');
   for(const pic of item.inlineImages||[]){
    const card=make('section');card.className='inline-card';const title=make('h4',pic.image.name);card.append(title);
    const field=(label,input)=>{const l=make('label',label);l.append(input);card.append(l);return input;};
@@ -49,6 +50,7 @@ export function createInlineEditor({host,getItem,changed,getFrame,isBusy}){
  }
  return {render};
 }
+
 
 
 

@@ -1,4 +1,4 @@
-import {pageGeometry,fitTemplate} from './page-settings.js?v=21';
+import {pageGeometry,fitTemplate} from './page-settings.js?v=57';
 import {readerLogo} from './reader-logo.js?v=23';
 export const SPEC = Object.freeze({width:768.24,height:768.24*Math.SQRT2,rows:36,columns:15,bodySize:22,titleSize:26,pitch:22.44,linePitch:38,top:127.556,oddRight:643.151,evenRight:671.497});
 const NO_START = new Set(Array.from('、。，．・：；？！‼⁇⁈⁉）)]｝}〕〉》」』】〙〗〟’”｠»ぁぃぅぇぉっゃゅょゎァィゥェォッャュョヮヵヶー〜～…‥'));
@@ -335,7 +335,7 @@ export function withRuby(pages,font){
   }
   return pages;
 }
-function paginateReaderLegacy({title='',author='',body='',preface='',indent=true,startSide='odd',combineDigits=true,autoPunctuationSpace=false,font}){
+export function paginateReaderTemplate({title='',author='',body='',preface='',indent=true,startSide='odd',combineDigits=true,autoPunctuationSpace=false,font}){
   title=title.trim().normalize('NFC');author=author.trim().normalize('NFC');
   if(!title)throw new Error('読者寄稿のタイトルを入力してください。');
   if(!author)throw new Error('読者寄稿の作者名を入力してください。');
@@ -515,8 +515,9 @@ export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=
 }
 
 export function paginateAfterword(options){return fitTemplate(paginateAfterwordLegacy(options),options.pageSettings,options.startSide);}
-export function paginateReader(options){return fitTemplate(paginateReaderLegacy(options),options.pageSettings,options.startSide);}
+export function paginateReader(options){return fitTemplate(paginateReaderTemplate(options),options.pageSettings,options.startSide);}
 export function paginateToc(options){return fitTemplate(paginateTocLegacy(options),options.pageSettings,options.startSide);}
+
 
 
 
