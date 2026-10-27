@@ -65,7 +65,11 @@ export function paginateWithImages(options){
       if(!half&&!full)box={x,y,width:frameWidth,height:totalHeight};
       const position=cropPlacement(pic.image,frame,pic.crop);
       page.images.push({data:pic.image.data,...position,clip:frame});
-      for(const [lines,captionY] of [[above,y],[below,frame.y+frame.height+6]])lines.forEach((text,n)=>page.cells.push({char:text,source:text,kind:'caption',role:'caption',x:frame.x,y:captionY+n*17,size:13}));
+      for(const [lines,captionY,align] of [[above,y,pic.aboveAlign],[below,frame.y+frame.height+6,pic.belowAlign]])lines.forEach((text,n)=>{
+        const width=glyphRun(options.font,text,true).positions.reduce((sum,p)=>sum+p.xAdvance,0)*13/options.font.unitsPerEm;
+        const space=Math.max(0,frame.width-width),shift=align==='right'?space:align==='center'?space/2:0;
+        page.cells.push({char:text,source:text,kind:'caption',role:'caption',x:frame.x+shift,y:captionY+n*17,size:13});
+      });
     }
     frames.push({page,right,reserve,box,full:pic?.position==='full',previous:null});
   }
@@ -107,6 +111,7 @@ export function paginateWithImages(options){
   for(const page of pages){const fixed=page.cells.filter(c=>c.role!=='body');page.cells=page.cells.filter(c=>c.role==='body');withRuby([page],options.font);page.cells.push(...fixed);}
   return {...seed,pages,body:options.body};
 }
+
 
 
 

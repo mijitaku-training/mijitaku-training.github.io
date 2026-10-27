@@ -1,5 +1,5 @@
-import {placements,cropPlacement} from './inline-layout.js?v=55';
-import {readImageFile} from './book.js?v=55';
+import {placements,cropPlacement} from './inline-layout.js?v=56';
+import {readImageFile} from './book.js?v=56';
 export function createInlineEditor({host,getItem,changed,getFrame,isBusy}){
  const make=(tag,text)=>{const e=document.createElement(tag);if(text)e.textContent=text;return e;};
  const heading=make('h3','本文内の画像'),help=make('p','作品内のページ番号を指定します。1ページに1枚。画像の上下に横書きの注釈を付けられます。'),add=make('button','＋ 本文内に画像を追加'),file=make('input'),list=make('div');
@@ -17,7 +17,15 @@ export function createInlineEditor({host,getItem,changed,getFrame,isBusy}){
    const position=field('配置',make('select'));for(const [value,label] of placements){const o=make('option',label);o.value=value;position.append(o);}position.value=pic.position;
    const shape=field('画像枠の形',make('select'));for(const [value,label] of [['frame','配置に合わせる'],['square','正方形（1：1）'],['original','元画像の比率']]){const o=make('option',label);o.value=value;shape.append(o);}shape.value=pic.shape||'frame';
    const fit=field('画像の収め方',make('select'));for(const [value,label] of [['contain','画像全体を収める（切らない）'],['cover','枠いっぱいにする（トリミング）']]){const o=make('option',label);o.value=value;fit.append(o);}fit.value=pic.crop.fit||'cover';
-   const above=field('画像の上の注釈',make('textarea')),below=field('画像の下の注釈',make('textarea'));above.value=pic.above;below.value=pic.below;above.maxLength=below.maxLength=200;above.rows=below.rows=2;
+   const captionField=(key,label)=>{
+    const input=field(label,make('textarea'));input.value=pic[key]||'';input.maxLength=200;input.rows=2;
+    const align=field(label+'の揃え方',make('select'));
+    for(const [value,text] of [['left','左揃え'],['center','中央揃え'],['right','右揃え']]){const o=make('option',text);o.value=value;align.append(o);}
+    align.value=pic[key+'Align']||'left';input.style.textAlign=align.value;
+    align.onchange=()=>{pic[key+'Align']=align.value;input.style.textAlign=align.value;changed();};
+    return input;
+   };
+   const above=captionField('above','画像の上の注釈'),below=captionField('below','画像の下の注釈');
    const stage=make('div');stage.className='inline-crop';stage.style.background='#fff';stage.style.outline='1px solid #bbc4d3';stage.setAttribute('aria-label','画像のトリミング。ドラッグで位置を調整');const image=make('img');image.src=pic.image.data;image.alt='トリミング対象';image.draggable=false;stage.append(image);card.append(stage);
    const zoom=field('拡大・縮小',make('input'));zoom.type='range';zoom.min=.1;zoom.max=5;zoom.step=.01;zoom.value=pic.crop.zoom;const zoomLabel=make('output');zoomLabel.setAttribute('aria-live','polite');card.append(zoomLabel);
    const horizontal=field('左右の位置',make('input')),vertical=field('上下の位置',make('input'));for(const input of [horizontal,vertical]){input.type='range';input.min=0;input.max=1;input.step=.005;}
@@ -41,6 +49,7 @@ export function createInlineEditor({host,getItem,changed,getFrame,isBusy}){
  }
  return {render};
 }
+
 
 
 
