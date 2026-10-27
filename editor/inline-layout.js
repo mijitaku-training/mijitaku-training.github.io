@@ -2,8 +2,9 @@ import {pageGeometry} from './page-settings.js?v=21';
 import {paginate,breakLines,withRuby,glyphRun,graphemes} from './layout.js?v=50';
 export const placements=[['top-right','右上'],['top-left','左上'],['bottom-right','右下'],['bottom-left','左下'],['right','右半分'],['left','左半分'],['full','フルページ']];
 export function cropPlacement(image,frame,crop={}){
-  const zoom=Math.max(1,Math.min(5,Number(crop.zoom)||1));
-  const scale=Math.max(frame.width/image.width,frame.height/image.height)*zoom;
+  const zoom=Math.max(.1,Math.min(5,Number(crop.zoom)||1));
+  const fit=crop.fit==='contain'?Math.min:Math.max;
+  const scale=fit(frame.width/image.width,frame.height/image.height)*zoom;
   const width=image.width*scale,height=image.height*scale;
   const x=Math.max(0,Math.min(1,Number.isFinite(crop.x)?crop.x:.5)),y=Math.max(0,Math.min(1,Number.isFinite(crop.y)?crop.y:.5));
   return {x:frame.x-(width-frame.width)*x,y:frame.y-(height-frame.height)*y,width,height};
@@ -42,13 +43,29 @@ export function paginateWithImages(options){
       const imageColumns=Math.floor(columns/2),blockWidth=(imageColumns-1)*g.linePitch+g.bodySize;
       box={x:full?xLeft:left?xLeft:xRight-blockWidth,y:g.top,width:full?width:blockWidth,height:full||half?height:Math.floor(g.rows/2)*g.pitch};
       if(pic.position.startsWith('bottom'))box.y=g.top+height-box.height;
-      const above=caption(pic.above,box.width,options.font),below=caption(pic.below,box.width,options.font),captionPitch=17;
-      const upper=above.length?above.length*captionPitch+6:0,lower=below.length?below.length*captionPitch+6:0;
-      const frame={x:box.x,y:box.y+upper,width:box.width,height:box.height-upper-lower};
-      if(frame.height<44)throw new Error('注釈が長すぎます。短くするか配置を変えてください。');
+      // Shape the image frame independently from its page placement.
+      const slot={...box},ratio=pic.shape==='square'?1:pic.shape==='original'?pic.image.width/pic.image.height:null;
+      let frameWidth=slot.width,above,below,upper,lower,frameHeight;
+      for(let attempt=0;attempt<30;attempt++){
+        above=caption(pic.above,frameWidth,options.font);below=caption(pic.below,frameWidth,options.font);
+        upper=above.length?above.length*17+6:0;lower=below.length?below.length*17+6:0;
+        const available=slot.height-upper-lower;
+        if(available<44||frameWidth<44)throw new Error('画像枠が小さすぎます。注釈を短くするか配置・画像枠の形を変えてください。');
+        frameHeight=ratio?frameWidth/ratio:available;
+        if(frameHeight<=available+.001)break;
+        frameWidth=available*ratio;
+        if(attempt===29)throw new Error('注釈が長すぎます。短くするか配置を変えてください。');
+      }
+      const totalHeight=upper+frameHeight+lower;
+      const x=full?slot.x+(slot.width-frameWidth)/2:left?slot.x:slot.x+slot.width-frameWidth;
+      const y=full?slot.y+(slot.height-totalHeight)/2:pic.position.startsWith('bottom')?slot.y+slot.height-totalHeight:slot.y;
+      const frame={x,y:y+upper,width:frameWidth,height:frameHeight};
+      // Corner placements release the remaining space back to the manuscript.
+      // Half-page placements continue reserving the selected half.
+      if(!half&&!full)box={x,y,width:frameWidth,height:totalHeight};
       const position=cropPlacement(pic.image,frame,pic.crop);
       page.images.push({data:pic.image.data,...position,clip:frame});
-      for(const [lines,y] of [[above,box.y],[below,frame.y+frame.height+6]])lines.forEach((text,n)=>page.cells.push({char:text,source:text,kind:'caption',role:'caption',x:box.x,y:y+n*captionPitch,size:13}));
+      for(const [lines,captionY] of [[above,y],[below,frame.y+frame.height+6]])lines.forEach((text,n)=>page.cells.push({char:text,source:text,kind:'caption',role:'caption',x:frame.x,y:captionY+n*17,size:13}));
     }
     if(pic?.position==='full')return;
     const actualReserve=reserve;
@@ -70,3 +87,4 @@ export function paginateWithImages(options){
   for(const page of pages){const fixed=page.cells.filter(c=>c.role!=='body');page.cells=page.cells.filter(c=>c.role==='body');withRuby([page],options.font);page.cells.push(...fixed);}
   return {...seed,pages,body:options.body};
 }
+
