@@ -382,14 +382,16 @@ function paginateTocLegacy({entries=[],font}){
     if(!entry.title?.trim())throw new Error(`目次の${index+1}番目にタイトルを入力してください。`);
     const title=textUnits(entry.title.trim().normalize('NFC')),author=textUnits((entry.author||'').trim().normalize('NFC'));
     if(title.length>54||author.length>18)throw new Error('目次のタイトルは54字、作者名は18字までにしてください。');
-    const x=596-index*pitch,authorTop=bottom-author.length*22;
+    const authorAdvance=u=>u.text===' '?11:22;
+    const x=596-index*pitch,authorTop=bottom-author.reduce((sum,u)=>sum+authorAdvance(u),0);
     const label=entry.reader&&author.length?textUnits('読者寄稿'):[];
     const labelTop=authorTop-18-label.length*14;
     const available=(label.length?labelTop:author.length?authorTop:bottom)-top-24;
     const titleSize=Math.min(22,available/Math.max(1,title.length));
     if(titleSize<14)throw new Error(`「${entry.title}」は目次の縦1列に収まりません。目次用のタイトルを短くしてください。`);
     title.forEach((u,n)=>add(u,x+(22-titleSize)/2,top+n*titleSize,titleSize,'toc-title'));
-    author.forEach((u,n)=>add(u,x,authorTop+n*22,22,'toc-author'));
+    let authorY=authorTop;
+    author.forEach(u=>{add(u,x,authorY,22,'toc-author');authorY+=authorAdvance(u);});
     label.forEach((u,n)=>add(u,x+4,labelTop+n*14,14,'toc-reader'));
   });
   return {title:'目次',author:'',pages:withRuby([{cells,index:0,layout:'toc'}],font)};
@@ -517,6 +519,7 @@ export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=
 export function paginateAfterword(options){return fitTemplate(paginateAfterwordLegacy(options),options.pageSettings,options.startSide);}
 export function paginateReader(options){return fitTemplate(paginateReaderTemplate(options),options.pageSettings,options.startSide);}
 export function paginateToc(options){return fitTemplate(paginateTocLegacy(options),options.pageSettings,options.startSide);}
+
 
 
 
