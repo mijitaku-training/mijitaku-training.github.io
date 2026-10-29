@@ -233,6 +233,17 @@ export function sizedCell(unit,baseSize,x){
   const size=unit.size??baseSize;
   return {size,x:x+(baseSize-size)/2,...(unit.size?{explicitSize:true}:{}),...(unit.positionedSize?{positionedSize:true}:{})};
 }
+// Shared advances for titles and names: preserve full spaces, halve ASCII spaces.
+const headingAdvance=unit=>unit.text===' '?0.5:1;
+const headingLength=units=>units.reduce((sum,unit)=>sum+headingAdvance(unit),0);
+function headingPositions(units,capacity=Infinity){
+  let column=0,offset=0;
+  return units.map(unit=>{
+    const advance=headingAdvance(unit);
+    if(offset+advance>capacity){column++;offset=0;}
+    const position={unit,column,offset};offset+=advance;return position;
+  });
+}
 export function paginate({title='',author='',body='',indent=true,startSide='odd',combineDigits=true,autoPunctuationSpace=false,pageSettings,font,geometryBody}){
   title=title.trim().normalize('NFC');author=author.trim().normalize('NFC');
   if(!body.trim())throw new Error('本文を入力してください。');
@@ -243,10 +254,11 @@ export function paginate({title='',author='',body='',indent=true,startSide='odd'
   if(SPEC.rows<4||SPEC.columns<4)throw new Error('本文を配置する範囲が狭すぎます。余白を減らしてください。');
   const titleRows=Math.min(27,Math.max(1,Math.floor((SPEC.bottom-SPEC.top-56.693)/26)));
   const titleChars=textUnits(title,{combineDigits}),authorChars=textUnits(author,{combineDigits});
-  const titleColumns=titleChars.length?Math.ceil(titleChars.length/titleRows):0;
+  const titlePositions=headingPositions(titleChars,titleRows);
+  const titleColumns=titlePositions.length?titlePositions.at(-1).column+1:0;
   const firstReserve=title||author?Math.max(titleColumns,1)+2:0;
   if(firstReserve>=SPEC.columns)throw new Error('タイトルと本文が収まりません。余白を減らすか、タイトルを短くしてください。');
-  if(authorChars.length*22>SPEC.bottom-SPEC.top-61.321)throw new Error('作者名が収まりません。上下の余白を減らしてください。');
+  if(headingLength(authorChars)*22>SPEC.bottom-SPEC.top-61.321)throw new Error('作者名が収まりません。上下の余白を減らしてください。');
   const lines=breakLines(body,indent,combineDigits,SPEC.rows,{font,size:SPEC.bodySize,pitch:SPEC.pitch,autoPunctuationSpace});
   const pages=[];let cursor=0;
   while(cursor<lines.length){
@@ -258,9 +270,9 @@ export function paginate({title='',author='',body='',indent=true,startSide='odd'
     const cells=[];
     pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:right-offset*SPEC.linePitch-packed[col].offset-SPEC.bodySize/2,y:SPEC.top+unit.rowOffset*SPEC.pitch,...sizedCell(unit,SPEC.bodySize,right-offset*SPEC.linePitch-packed[col].offset-SPEC.bodySize/2),role:'body'})));
     if(index===0){
-      titleChars.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:right-Math.floor(n/titleRows)*SPEC.linePitch-13,y:SPEC.top+56.693+(n%titleRows)*26,size:26,role:'title'}));
+      titlePositions.forEach(({unit,column,offset})=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:right-column*SPEC.linePitch-13,y:SPEC.top+56.693+offset*26,size:26,role:'title'}));
       const authorX=right-25.8-(authorChars.some(u=>u.ruby)?12:0)-(titleColumns>1?SPEC.linePitch:0);
-      authorChars.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:authorX-11,y:SPEC.bottom-61.321-authorChars.length*22+n*22,size:22,role:'author'}));
+      headingPositions(authorChars).forEach(({unit,offset:n})=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:authorX-11,y:SPEC.bottom-61.321-headingLength(authorChars)*22+n*22,size:22,role:'author'}));
     }
     pages.push({cells,lines:pageLines,offset,index,side:odd?'odd':'even',width:SPEC.width,height:SPEC.height});
   }
@@ -280,8 +292,8 @@ function paginateAfterwordLegacy({title='あとがき',author='',body='',indent=
     const packed=packLines(lines,cursor,columns,bodySize,linePitch);
     const index=pages.length,cells=[],pageLines=packed.map(p=>p.line);cursor+=pageLines.length;
     pageLines.forEach((line,col)=>line.forEach((unit,row)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-packed[col].offset,y:130+unit.rowOffset*pitch,...sizedCell(unit,bodySize,500-packed[col].offset),role:'body'})));
-    heading.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:586,y:186+n*24,size:24,role:'title'}));
-    if(cursor>=lines.length)name.forEach((unit,n)=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-packed.at(-1).offset-packed.at(-1).inset.left-2*linePitch,y:876-name.length*22+n*22,size:22,role:'author'}));
+    headingPositions(heading).forEach(({unit,offset:n})=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:586,y:186+n*24,size:24,role:'title'}));
+    if(cursor>=lines.length)headingPositions(name).forEach(({unit,offset:n})=>cells.push({char:unit.display,source:unit.text,kind:unit.kind,italic:unit.italic,ruby:unit.ruby,rubyIndex:unit.rubyIndex,x:500-packed.at(-1).offset-packed.at(-1).inset.left-2*linePitch,y:876-headingLength(name)*22+n*22,size:22,role:'author'}));
     pages.push({cells,lines:pageLines,index,side:(index+(startSide==='even'?1:0))%2?'even':'odd',layout:'afterword'});
   }
   return {title,author,body:normalizeBody(body),indent,startSide,combineDigits,pages:withRuby(pages,font)};
@@ -356,8 +368,8 @@ export function paginateReaderTemplate({title='',author='',body='',preface='',in
     pageLines.forEach((line,col)=>line.forEach((u,row)=>add(cells,u,right-packed[col].offset-SPEC.bodySize/2,SPEC.top+u.rowOffset*SPEC.pitch,SPEC.bodySize,'body')));
     const page={cells,lines:pageLines,index,side:odd?'odd':'even',layout:'reader'};
     if(first){
-      textUnits(title,{combineDigits}).forEach((u,n)=>add(cells,u,422,184+n*26,26,'title'));
-      const name=textUnits(author,{combineDigits});name.forEach((u,n)=>add(cells,u,name.some(c=>c.ruby)?388:400,873.635-name.length*22+n*22,22,'author'));
+      headingPositions(textUnits(title,{combineDigits})).forEach(({unit:u,offset:n})=>add(cells,u,422,184+n*26,26,'title'));
+      const name=textUnits(author,{combineDigits});headingPositions(name).forEach(({unit:u,offset:n})=>add(cells,u,name.some(c=>c.ruby)?388:400,873.635-headingLength(name)*22+n*22,22,'author'));
       const ruleX=510+176*134/1254,ruleWidth=176*(1121-134)/1254;
       const heading=textUnits('まえがき',{markup:false}),headingSize=16,headingPitch=30;
       const headingX=ruleX+(ruleWidth-((heading.length-1)*headingPitch+headingSize))/2;
@@ -382,14 +394,14 @@ function paginateTocLegacy({entries=[],font}){
     if(!entry.title?.trim())throw new Error(`目次の${index+1}番目にタイトルを入力してください。`);
     const title=textUnits(entry.title.trim().normalize('NFC')),author=textUnits((entry.author||'').trim().normalize('NFC'));
     if(title.length>54||author.length>18)throw new Error('目次のタイトルは54字、作者名は18字までにしてください。');
-    const authorAdvance=u=>u.text===' '?11:22;
+    const authorAdvance=u=>headingAdvance(u)*22;
     const x=596-index*pitch,authorTop=bottom-author.reduce((sum,u)=>sum+authorAdvance(u),0);
     const label=entry.reader&&author.length?textUnits('読者寄稿'):[];
     const labelTop=authorTop-18-label.length*14;
     const available=(label.length?labelTop:author.length?authorTop:bottom)-top-24;
-    const titleSize=Math.min(22,available/Math.max(1,title.length));
+    const titleSize=Math.min(22,available/Math.max(1,headingLength(title)));
     if(titleSize<14)throw new Error(`「${entry.title}」は目次の縦1列に収まりません。目次用のタイトルを短くしてください。`);
-    title.forEach((u,n)=>add(u,x+(22-titleSize)/2,top+n*titleSize,titleSize,'toc-title'));
+    headingPositions(title).forEach(({unit:u,offset:n})=>add(u,x+(22-titleSize)/2,top+n*titleSize,titleSize,'toc-title'));
     let authorY=authorTop;
     author.forEach(u=>{add(u,x,authorY,22,'toc-author');authorY+=authorAdvance(u);});
     label.forEach((u,n)=>add(u,x+4,labelTop+n*14,14,'toc-reader'));
@@ -519,6 +531,7 @@ export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=
 export function paginateAfterword(options){return fitTemplate(paginateAfterwordLegacy(options),options.pageSettings,options.startSide);}
 export function paginateReader(options){return fitTemplate(paginateReaderTemplate(options),options.pageSettings,options.startSide);}
 export function paginateToc(options){return fitTemplate(paginateTocLegacy(options),options.pageSettings,options.startSide);}
+
 
 
 
