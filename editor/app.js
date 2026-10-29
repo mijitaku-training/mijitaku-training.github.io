@@ -3,7 +3,7 @@ import {createInlineEditor} from './inline-editor.js?v=57';
 import {DEFAULT_PAGE_SETTINGS,normalizePageSettings,pageGeometry,applyPageSettings} from './page-settings.js?v=57';
 import {saveDraft,readDraft,readRecovery,readBackupAction,saveBackupAction,commitRestoration,backupFilename,makeProject,validateProject,bytesToBase64,base64ToBytes} from './storage.js?v=56';
 import {createWebZip} from './web-export.js?v=57';
-import {paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=57';
+import {glyphPosition,italicMatrix,paginate,pageSvg,missingCharacters,createPdf,graphemes,prefaceLength,plainText,textUnits,rubyMatches} from './layout.js?v=57';
 import {buildBook,moveItem,imageSvg,readImageFile} from './book.js?v=57';
 import {readPdfFile,restorePdfSizes} from './pdf-import.js?v=21';
 const $=id=>document.getElementById(id);
@@ -113,7 +113,7 @@ function message(text,error=false){$('status').textContent=text;$('status').clas
 function setBusy(value){busy=value;$('undo-import').disabled=value;$('preview-button').disabled=value||!font;$('sample-button').disabled=value;$('export').disabled=value||!proof;$('export-web').disabled=value||!proof;$('font-file').disabled=value;$("font-choice").disabled=value;$("italic-font-choice").disabled=value;for(const control of document.querySelectorAll('.page-settings input,.page-settings select,.page-settings button'))control.disabled=value||(!value&&$('margin-fields').disabled&&control.id.startsWith('margin-'));for(const id of ['import-project','backup-project','save-draft','clear-project','undo-clear','add-blank','blank-preview','add-toc','toc-import','toc-add','toc-preview','add-text','add-reader','add-image','add-afterword','replace-image','image-preview','add-pdf','replace-pdf','pdf-preview','pdf-title','pdf-author','pdf-kind'])$(id).disabled=value;renderList();if(selectedItem()?.kind==='toc')renderToc();}
 function inputs(){return {preface:$('preface').value,title:$('title').value,author:$('author').value,body:$('body').value,indent:$('indent').checked,startSide:$('start-side').value,combineDigits:$('combine-digits').checked,autoPunctuationSpace:$('punctuation-space')?.checked===true};}
 function updatePrefaceCount(){$('preface-count').textContent=prefaceLength($('preface').value)+' / 150文字';}
-function invalidate(){saveCurrent();scheduleDraft();updatePrefaceCount();revision++;proof=null;pdfFile=null;$('export').disabled=true;$('export-web').disabled=true;$('download-area').hidden=true;$('web-download-area').hidden=true;webFile=null;$('proof-note').textContent='内容を変更しました。「並び順で確認」で更新してください。';$('page-info').textContent='変更は未反映';$('char-count').textContent=graphemes(plainText($('body').value).replace(/\s/g,'')).length.toLocaleString('ja')+'字';renderList();}
+function invalidate(){clearLayoutCheck();saveCurrent();scheduleDraft();updatePrefaceCount();revision++;proof=null;pdfFile=null;$('export').disabled=true;$('export-web').disabled=true;$('download-area').hidden=true;$('web-download-area').hidden=true;webFile=null;$('proof-note').textContent='内容を変更しました。「並び順で確認」で更新してください。';$('page-info').textContent='変更は未反映';$('char-count').textContent=graphemes(plainText($('body').value).replace(/\s/g,'')).length.toLocaleString('ja')+'字';renderList();}
 function showPage(){
   if(!proof)return;
   const area=$('paper-area'),spread=previewMode==='spread',range=previewRange(currentPage,proof.pages.length,proofStartSide,spread);
@@ -172,12 +172,12 @@ function typeset(scroll=false){
     if(changed){
       items=prepared;renderEditor();updatePrefaceCount();revision++;scheduleDraft();
     }
-    proof=next;proofStartSide=$('start-side').value;currentPage=Math.max(0,proof.pages.findIndex(p=>p.itemId===selectedId));showPage();$('export').disabled=busy;$('export-web').disabled=busy;renderList();
+    proof=next;renderLayoutCheck(proof);proofStartSide=$('start-side').value;currentPage=Math.max(0,proof.pages.findIndex(p=>p.itemId===selectedId));showPage();$('export').disabled=busy;$('export-web').disabled=busy;renderList();
     $('proof-note').textContent=`${proof.sections.length}作品・全${proof.pages.length}ページ`;
     $('download-area').hidden=true;$('web-download-area').hidden=true;webFile=null;pdfFile=null;message('組版できました。ページを確認してPDFを作れます。');
     if(scroll&&window.innerWidth<=760)$('preview-heading').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth',block:'start'});
     return proof;
-  }catch(error){proof=null;$('export').disabled=true;$('export-web').disabled=true;message(error.message,true);return null;}
+  }catch(error){clearLayoutCheck();proof=null;$('export').disabled=true;$('export-web').disabled=true;message(error.message,true);return null;}
 }
 async function loadFont(bytes,name,custom=false){
   const candidate=window.fontkit.create(new Uint8Array(bytes));
@@ -700,3 +700,49 @@ $('inline-image-panel').addEventListener('toggle',()=>{if($('inline-image-panel'
 
 
 
+
+
+// Check visible ink, not advance boxes: punctuation hanging inside the paper is valid.
+function checkPageLayout(page,fallbackFont){
+ const width=page.width||768.24,height=page.height||768.24*Math.SQRT2,tolerance=.5,found=new Set();
+ const outside=b=>b.x<-tolerance||b.y<-tolerance||b.x+b.width>width+tolerance||b.y+b.height>height+tolerance;
+ const intersect=(a,b)=>Math.min(a.x+a.width,b.x+b.width)-Math.max(a.x,b.x)>tolerance&&Math.min(a.y+a.height,b.y+b.height)-Math.max(a.y,b.y)>tolerance;
+ const label=c=>c.role==='ruby'?'ルビ':c.role==='title'?'タイトル':c.role==='author'?'作者名':c.role==='caption'?'画像注釈':'本文';
+ const ink=[];
+ for(const cell of page.cells||[]){
+  const f=page.font||fallbackFont,{run,scale,pad,baseline,sideways}=glyphPosition(f,cell);let pen=0;
+  for(let i=0;i<run.glyphs.length;i++){
+   const b=run.glyphs[i].bbox,p=run.positions[i],x=cell.x+pad+(pen+p.xOffset)*scale,y=baseline-p.yOffset*scale;pen+=p.xAdvance;
+   if(!(b.maxX>b.minX&&b.maxY>b.minY))continue;
+   let points=[[b.minX,b.minY],[b.minX,b.maxY],[b.maxX,b.minY],[b.maxX,b.maxY]].map(([gx,gy])=>[x+gx*scale,y-gy*scale]);
+   if(sideways){const cx=cell.x+cell.size/2,cy=cell.y+cell.size/2;points=points.map(([a,b])=>[cx-(b-cy),cy+(a-cx)]);}
+   if(cell.italic){const [a,b,c,d,e,f]=italicMatrix(cell);points=points.map(([x,y])=>[a*x+c*y+e,b*x+d*y+f]);}
+   const xs=points.map(p=>p[0]),ys=points.map(p=>p[1]),rect={x:Math.min(...xs),y:Math.min(...ys),width:Math.max(...xs)-Math.min(...xs),height:Math.max(...ys)-Math.min(...ys)};
+   if(outside(rect))found.add(label(cell)+'がページ端で切れる可能性があります');
+   ink.push({rect,cell});
+  }
+ }
+ const visibleImage=r=>{const c=r.clip||{x:0,y:0,width,height},x=Math.max(r.x,c.x),y=Math.max(r.y,c.y),right=Math.min(r.x+r.width,c.x+c.width),bottom=Math.min(r.y+r.height,c.y+c.height);return {x,y,width:Math.max(0,right-x),height:Math.max(0,bottom-y)};};
+ const images=(page.images||[]).map(r=>r.clip?visibleImage(r):r);
+ for(const r of images)if(r.width>0&&r.height>0&&outside(r))found.add('画像の表示範囲がページ端からはみ出しています');
+ // Whole-page imported images/PDFs intentionally clip or fit to their page.
+ for(const a of ink.filter(x=>x.cell.role==='caption')){
+  if(ink.some(b=>b.cell!==a.cell&&b.cell.role!=='caption'&&intersect(a.rect,b.rect)))found.add('画像注釈が本文・見出し・ルビと重なる可能性があります');
+  if(images.some(b=>intersect(a.rect,b)))found.add('画像注釈が画像と重なる可能性があります');
+ }
+ return [...found];
+}
+function clearLayoutCheck(){const panel=document.getElementById('layout-check');if(panel){panel.replaceChildren();panel.hidden=true;}}
+function renderLayoutCheck(doc){
+ let panel=document.getElementById('layout-check');if(!panel){panel=document.createElement('details');panel.id='layout-check';panel.className='proof-details';document.getElementById('paper-area').before(panel);}
+ panel.hidden=false;panel.replaceChildren();const summary=document.createElement('summary');panel.append(summary);let count=0,skipped=0;
+ const list=document.createElement('ul');
+ for(const [index,page] of doc.pages.entries()){
+  if(page.kind==='image'){skipped++;continue;}
+  const warnings=checkPageLayout(page,font);if(!warnings.length)continue;count+=warnings.length;
+  const li=document.createElement('li'),button=document.createElement('button');button.type='button';button.textContent=`「${page.itemTitle}」作品内${page.itemPage}ページ目（全体${index+1}ページ）`;
+  button.addEventListener('click',()=>{if(proof!==doc)return;currentPage=index;showPage();$('paper-area').scrollIntoView({block:'start',behavior:'smooth'});});li.append(button,document.createTextNode('：'+warnings.join('／')));list.append(li);
+ }
+ summary.textContent=count?`組版チェック：要確認 ${count}件`:'組版チェック：今回の検査で問題は見つかりませんでした';panel.open=count>0;
+ const note=document.createElement('p');note.textContent='ページ端で切れる文字・ルビ・画像と、画像注釈の重なりを検査します。句読点のぶら下げや指定どおりのトリミングは警告しません。文字の形の外接枠で判定するため、重なりは誌面でも確認してください。'+(skipped?` 貼り付けPDF・画像 ${skipped}ページの内部は検査対象外です。`:'');panel.append(note,list);
+}
