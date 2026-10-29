@@ -166,7 +166,7 @@
   <footer><span>月刊 身仕度</span><a href="assets/font-license.txt" target="_blank" rel="noopener">フォントのライセンス</a></footer>
 
 <style>
-.ws-overlay{position:fixed;pointer-events:none!important;overflow:hidden;z-index:20;color:transparent;user-select:none;contain:strict}
+.ws-overlay{position:absolute;pointer-events:none!important;overflow:hidden;z-index:1;color:transparent;user-select:none;contain:strict}
 .ws-mirror{color:transparent!important;position:relative;margin:0;box-sizing:border-box;border:0;min-height:100%;}
 .ws-mark{position:relative;color:transparent!important}
 .ws-mark::after{content:attr(data-mark);position:absolute;left:0;top:0;color:#77829a;opacity:.8;font-size:.75em;line-height:inherit;pointer-events:none}
@@ -179,7 +179,9 @@
 (()=>{
  const toggle=document.getElementById('show-whitespace');
  const selector='#title,#author,#body,#preface,#pdf-title,#pdf-author,#toc-entries input[type="text"],#inline-image-host textarea';
- const layers=new Map();let frame=0;
+ const layers=new Map(),hosts=new Map();let frame=0;
+ function removeLayer(el,item){el.removeEventListener('scroll',item.syncScroll);item.outer.remove();}
+ function restoreHosts(){for(const [host,position] of hosts)host.style.position=position;hosts.clear();}
  const props=['fontFamily','fontSize','fontWeight','fontStyle','fontVariant','lineHeight','letterSpacing','textAlign','textIndent','textTransform','wordSpacing','wordBreak','overflowWrap','tabSize','paddingTop','paddingRight','paddingBottom','paddingLeft','direction'];
  function fill(mirror,value){
   const fragment=document.createDocumentFragment();
@@ -196,12 +198,12 @@
   const fields=new Set(document.querySelectorAll(selector));
   // Caption controls are created dynamically; identify their actual labels.
   document.querySelectorAll('textarea').forEach(el=>{if(el.closest('#inline-image-editor')||el.closest('#inline-images-panel'))fields.add(el);});
-  for(const [el,item] of layers)if(!fields.has(el)||!el.isConnected){item.outer.remove();layers.delete(el);}
+  for(const [el,item] of layers)if(!fields.has(el)||!el.isConnected){removeLayer(el,item);layers.delete(el);}
   for(const el of fields){
-   let item=layers.get(el);if(!item){const outer=document.createElement('div'),inner=document.createElement('div');outer.className='ws-overlay';outer.setAttribute('aria-hidden','true');inner.className='ws-mirror';outer.append(inner);document.body.append(outer);item={outer,inner,value:null};layers.set(el,item);}
-   const r=el.getBoundingClientRect(),cs=getComputedStyle(el);const visible=el.getClientRects().length&&r.bottom>0&&r.top<innerHeight;
+   let item=layers.get(el);if(!item){const outer=document.createElement('div'),inner=document.createElement('div');outer.className='ws-overlay';outer.setAttribute('aria-hidden','true');inner.className='ws-mirror';outer.append(inner);const host=el.parentElement;if(getComputedStyle(host).position==='static'){hosts.set(host,host.style.position);host.style.position='relative';}host.append(outer);const syncScroll=()=>{inner.style.transform=`translate(${-el.scrollLeft}px,${-el.scrollTop}px)`;};el.addEventListener('scroll',syncScroll,{passive:true});item={outer,inner,value:null,syncScroll};layers.set(el,item);}
+   const cs=getComputedStyle(el);const visible=el.getClientRects().length;
    item.outer.hidden=!visible;if(!visible)continue;
-   Object.assign(item.outer.style,{left:(r.left+el.clientLeft)+'px',top:(r.top+el.clientTop)+'px',width:el.clientWidth+'px',height:el.clientHeight+'px',borderRadius:cs.borderRadius});
+   Object.assign(item.outer.style,{left:(el.offsetLeft+el.clientLeft)+'px',top:(el.offsetTop+el.clientTop)+'px',width:el.clientWidth+'px',height:el.clientHeight+'px',borderRadius:cs.borderRadius});
    for(const prop of props)item.inner.style[prop]=cs[prop];
    item.inner.style.width=el.clientWidth+'px';item.inner.style.whiteSpace=el.tagName==='TEXTAREA'?'pre-wrap':'pre';
    item.inner.style.transform=`translate(${-el.scrollLeft}px,${-el.scrollTop}px)`;
@@ -209,12 +211,13 @@
   }
   frame=requestAnimationFrame(draw);
  }
- toggle.addEventListener('change',()=>{cancelAnimationFrame(frame);if(toggle.checked)draw();else{for(const {outer} of layers.values())outer.remove();layers.clear();}});
+ toggle.addEventListener('change',()=>{cancelAnimationFrame(frame);if(toggle.checked)draw();else{for(const [el,item] of layers)removeLayer(el,item);layers.clear();restoreHosts();}});
 })();
 </script>
 
 </body>
 </html>
+
 
 
 
