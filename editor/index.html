@@ -24,6 +24,10 @@
     <p class="draft-help">下書きと復元前の退避は、この端末・ブラウザ内の保存です。ブラウザのデータ削除や端末の故障に備え、バックアップファイルを端末の外にも保管してください。</p>
     <div class="clear-tools"><button id="clear-project" type="button">制作データをクリア</button><button id="undo-clear" type="button" hidden>クリアを元に戻す</button><span id="undo-clear-help" hidden>元に戻せるのは、このページを閉じる・再読み込みするまでです。</span></div>
   </section>
+  <section class="draft-tools" aria-label="編集時の表示">
+    <label><input id="show-whitespace" type="checkbox"> 空白・改行を表示</label>
+    <p class="draft-help">入力欄だけに目印を表示します。半角 · ／全角 □ ／タブ → ／改行 ↵。原稿・コピー・PDFには入りません。</p>
+  </section>
   <main>
     <section class="book-outline" aria-labelledby="book-heading">
       <div class="section-heading"><h2 id="book-heading">ページを並べる</h2><span class="step">01</span></div>
@@ -160,8 +164,58 @@
     </section>
   </main>
   <footer><span>月刊 身仕度</span><a href="assets/font-license.txt" target="_blank" rel="noopener">フォントのライセンス</a></footer>
+
+<style>
+.ws-overlay{position:fixed;pointer-events:none!important;overflow:hidden;z-index:20;color:transparent;user-select:none;contain:strict}
+.ws-mirror{color:transparent!important;position:relative;margin:0;box-sizing:border-box;border:0;min-height:100%;}
+.ws-mark{position:relative;color:transparent!important}
+.ws-mark::after{content:attr(data-mark);position:absolute;left:0;top:0;color:#77829a;opacity:.8;font-size:.75em;line-height:inherit;pointer-events:none}
+.ws-break{display:inline-block;width:0;height:0;position:relative;vertical-align:baseline}
+.ws-break::after{top:-1em;line-height:1}
+@media print{.ws-overlay{display:none!important}}
+</style>
+<script>
+// Presentation only: never assign field.value or modify manuscript events.
+(()=>{
+ const toggle=document.getElementById('show-whitespace');
+ const selector='#title,#author,#body,#preface,#pdf-title,#pdf-author,#toc-entries input[type="text"],#inline-image-host textarea';
+ const layers=new Map();let frame=0;
+ const props=['fontFamily','fontSize','fontWeight','fontStyle','fontVariant','lineHeight','letterSpacing','textAlign','textIndent','textTransform','wordSpacing','wordBreak','overflowWrap','tabSize','paddingTop','paddingRight','paddingBottom','paddingLeft','direction'];
+ function fill(mirror,value){
+  const fragment=document.createDocumentFragment();
+  for(const part of value.split(/([ \u3000\t\n])/)){
+   if(!part)continue;
+   const marks={' ':'·','　':'□','\t':'→','\n':'↵'};
+   if(marks[part]){const span=document.createElement('span');span.className='ws-mark'+(part==='\n'?' ws-break':'');span.dataset.mark=marks[part];span.textContent=part==='\n'?'':part;fragment.append(span);if(part==='\n')fragment.append(document.createTextNode('\n'));}
+   else fragment.append(document.createTextNode(part));
+  }
+  mirror.replaceChildren(fragment);
+ }
+ function draw(){
+  if(!toggle.checked)return;
+  const fields=new Set(document.querySelectorAll(selector));
+  // Caption controls are created dynamically; identify their actual labels.
+  document.querySelectorAll('textarea').forEach(el=>{if(el.closest('#inline-image-editor')||el.closest('#inline-images-panel'))fields.add(el);});
+  for(const [el,item] of layers)if(!fields.has(el)||!el.isConnected){item.outer.remove();layers.delete(el);}
+  for(const el of fields){
+   let item=layers.get(el);if(!item){const outer=document.createElement('div'),inner=document.createElement('div');outer.className='ws-overlay';outer.setAttribute('aria-hidden','true');inner.className='ws-mirror';outer.append(inner);document.body.append(outer);item={outer,inner,value:null};layers.set(el,item);}
+   const r=el.getBoundingClientRect(),cs=getComputedStyle(el);const visible=el.getClientRects().length&&r.bottom>0&&r.top<innerHeight;
+   item.outer.hidden=!visible;if(!visible)continue;
+   Object.assign(item.outer.style,{left:(r.left+el.clientLeft)+'px',top:(r.top+el.clientTop)+'px',width:el.clientWidth+'px',height:el.clientHeight+'px',borderRadius:cs.borderRadius});
+   for(const prop of props)item.inner.style[prop]=cs[prop];
+   item.inner.style.width=el.clientWidth+'px';item.inner.style.whiteSpace=el.tagName==='TEXTAREA'?'pre-wrap':'pre';
+   item.inner.style.transform=`translate(${-el.scrollLeft}px,${-el.scrollTop}px)`;
+   if(item.value!==el.value){fill(item.inner,el.value);item.value=el.value;}
+  }
+  frame=requestAnimationFrame(draw);
+ }
+ toggle.addEventListener('change',()=>{cancelAnimationFrame(frame);if(toggle.checked)draw();else{for(const {outer} of layers.values())outer.remove();layers.clear();}});
+})();
+</script>
+
 </body>
 </html>
+
 
 
 
