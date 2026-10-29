@@ -7,8 +7,8 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='5' fill='%23192544'/%3E%3Cpath d='M10 7v18M16 7v18M22 7v12' stroke='white' stroke-width='2'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="style.css?v=53">
   <script src="assets/fontkit.js" defer></script><script src="assets/pdf-lib.js" defer></script>
-  <script type="importmap">{"imports":{"./layout.js?v=57":"./layout.js?v=59","./app.js?v=57":"./app.js?v=60"}}</script>
-  <script type="module" src="app.js?v=60"></script>
+  <script type="importmap">{"imports":{"./layout.js?v=57":"./layout.js?v=61","./book.js?v=57":"./book.js?v=61","./storage.js?v=56":"./storage.js?v=61"}}</script>
+  <script type="module" src="app.js?v=61"></script>
 </head>
 <body>
   <header class="masthead"><div class="brand"><span class="brand-mark" aria-hidden="true">身</span><h1>身仕度 <span>組版室</span></h1></div><span class="version">編集の試作版 <b>0.3</b></span></header>
@@ -108,11 +108,12 @@
       </div>
       <div id="pdf-editor" hidden>
         <div class="field"><label for="pdf-kind">PDFの種類</label><select id="pdf-kind"><option value="work">作品PDF（目次に取り込む）</option><option value="extra">作品外PDF（目次に取り込まない）</option></select><p>短歌などの作品は「作品PDF」。表紙・扉絵・テプラ短歌・ひとこと・奥付などは「作品外PDF」を選んでください。どちらも全ページを誌面に入れます。</p></div>
+        <div class="field"><label for="pdf-fit">PDFの収め方</label><select id="pdf-fit"><option value="contain">全体を収める（切り取りなし）</option><option value="cover">ページいっぱいにする（切り取り）</option></select><p>「ページいっぱい」は誌面の比率に合わせて拡大し、中央を基準に端を切り取ります。文字などが切れる場合があります。PDF自体に含まれる白い余白は自動では除去しません。設定はこのPDFの全ページに適用します。</p></div>
         <p id="pdf-toc-help"></p>
         <div class="field"><label for="pdf-title">作品タイトル（一覧・目次用）</label><input id="pdf-title" type="text" maxlength="100"></div>
         <div class="field"><label for="pdf-author">作者名（目次用）</label><input id="pdf-author" type="text" maxlength="100"></div>
         <p id="pdf-description"></p>
-        <p>PDF内の文章・配置は変更せず、全ページを元の順番で入れます。元の縦横比を保ちながら、他のページと横幅を揃えます。本文の余白は追加しません。比率を変更した場合は、切り取らず新しい誌面に収めます。上下ボタンで作品ごと移動できます。タイトル・作者名を変えてもPDF内の文字は変わりません。</p>
+        <p>PDF内の文章・配置は変更せず、全ページを元の順番で入れます。元の縦横比を保ちながら、他のページと横幅を揃えます。本文の余白は追加しません。「全体を収める」は元の比率で横幅を揃え、比率を変更した場合も切り取らず収めます。「ページいっぱい」は設定した誌面の比率に合わせます。上下ボタンで作品ごと移動できます。タイトル・作者名を変えてもPDF内の文字は変わりません。</p>
         <p>1作品25MB・100ページまで。注釈・フォームがあるページは見た目を保つため画像として出力します。本文の修正は元のアプリで行い、PDFを選び直してください。</p>
         <div class="form-actions"><button id="pdf-preview" class="primary" type="button">並び順で確認</button><button id="replace-pdf" type="button">PDFを選び直す</button></div>
       </div>
@@ -139,7 +140,7 @@
             <label for="margin-outer">外側（％）<input id="margin-outer" type="number" min="0" max="45" step="0.1" inputmode="decimal"></label>
           </fieldset>
           <p>内側は本の綴じ側、外側はその反対側です。右綴じの奇数ページは右が内側、偶数ページは左が内側になります。</p>
-          <p>読み込んだPDFはアスペクト比だけを変更し、元の誌面を縦横同じ倍率で収めます。余白設定はPDFには適用しません。本文は余白に合わせて改ページし、目次・寄稿・あとがきは元の配置を保って調整します。</p>
+          <p>読み込んだPDFはアスペクト比と収め方に合わせて、縦横同じ倍率で配置します。余白設定はPDFには適用しません。本文は余白に合わせて改ページし、目次・寄稿・あとがきは元の配置を保って調整します。</p>
           <p>入力しただけでは変更されません。「適用する」で確定します。初期設定へのリセットも、適用するまで確定しません。</p>
           <p id="page-settings-info" role="status"></p>
           <div class="pdf-actions"><button id="apply-page-settings" type="button">適用する</button><button id="reset-page-settings" type="button">初期設定に戻す</button><button id="cancel-page-settings" type="button">キャンセル</button></div>
@@ -217,6 +218,7 @@
 
 </body>
 </html>
+
 
 
 

@@ -28,8 +28,8 @@ export function buildBook(items,{font,resolveFont,startSide='odd',title='身仕�
         // Use the book's page width while preserving the source page's proportions.
         // Different PDF point sizes otherwise appear as smaller sheets in a mixed book.
         const width=geometry.width,sourceWidth=image.pageWidth||image.width,sourceHeight=image.pageHeight||image.height;
-        const height=width*(item.pdfRatio?(item.pdfRatio.mode==='silver'?Math.SQRT2:item.pdfRatio.ratioHeight/item.pdfRatio.ratioWidth):sourceHeight/sourceWidth);
-        pages.push({width,height,kind:'image',image,placement:imagePlacement(image.pageWidth||image.width,image.pageHeight||image.height,'contain',{width,height}),pdfSource:item.pdf,pdfIndex,cells:[],index:pages.length,itemId:item.id,itemTitle,itemPage:pdfIndex+1});
+        const height=width*(item.pdfRatio?(item.pdfRatio.mode==='silver'?Math.SQRT2:item.pdfRatio.ratioHeight/item.pdfRatio.ratioWidth):item.pdfFit==='cover'?geometry.height/geometry.width:sourceHeight/sourceWidth);
+        pages.push({width,height,kind:'image',image,placement:imagePlacement(image.pageWidth||image.width,image.pageHeight||image.height,item.pdfFit||'contain',{width,height}),clip:{x:0,y:0,width,height},pdfFit:item.pdfFit||'contain',pdfSource:item.pdf,pdfIndex,cells:[],index:pages.length,itemId:item.id,itemTitle,itemPage:pdfIndex+1});
       });
     }else if(item.kind==='image'){
       if(!item.image?.data?.startsWith('data:image/jpeg;base64,'))throw new Error(`「${itemTitle}」の画像を選び直してください。`);
@@ -66,6 +66,7 @@ export async function readImageFile(file){
     return {data:canvas.toDataURL('image/jpeg',.94),width,height,name:file.name};
   }finally{URL.revokeObjectURL(url);}
 }
+
 
 
 

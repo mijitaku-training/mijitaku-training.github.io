@@ -96,7 +96,7 @@ export function validateProject(input){
         if(size&&(!Number.isFinite(im.pageWidth)||!Number.isFinite(im.pageHeight)||im.pageWidth<=0||im.pageHeight<=0||im.pageWidth>14400||im.pageHeight>14400))fail();
         return {...(size?{pageWidth:im.pageWidth,pageHeight:im.pageHeight}:{}),data:image,width:im.width,height:im.height,name:str(im.name,600),raster:im.raster===true};
       });
-      return {...setting,...(pdfRatio?{pdfRatio}:{}),id,kind:'pdf',title,author:str(i.author||'',1000),...(i.tocInclude===false?{tocInclude:false}:{}),pdf:{name:str(source.name,500),data,pages}};
+      return {...setting,...(pdfRatio?{pdfRatio}:{}),id,kind:'pdf',pdfFit:i.pdfFit==='cover'?'cover':'contain',title,author:str(i.author||'',1000),...(i.tocInclude===false?{tocInclude:false}:{}),pdf:{name:str(source.name,500),data,pages}};
     }
     if(i.kind==='image'){
       const im=i.image;if(!im||!Number.isInteger(im.width)||!Number.isInteger(im.height)||im.width<1||im.height<1||im.width>2400||im.height>2400)fail();
@@ -109,6 +109,7 @@ export function validateProject(input){
   if(input.font){const data=str(input.font.data,28000000);if(!/^[A-Za-z0-9+/]+={0,2}$/.test(data))fail();font={name:str(input.font.name,500),data};}
   return makeProject({pageSettings:normalizePageSettings(input.pageSettings),items,selectedId:seen.has(input.selectedId)?input.selectedId:items[0].id,startSide:input.startSide==='even'?'even':'odd',pdfName:str(input.pdfName||'',200),font});
 }
+
 
 
 

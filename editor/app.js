@@ -23,7 +23,7 @@ function loadPageSettingsDraft(){
   settingsDraft={...(item?.pageSettings||pageSettings)};
   if(scope==='selected'&&item?.kind==='pdf'){
     const first=item.pdf.pages[0];
-    settingsDraft={...pageSettings,...(item.pdfRatio||{mode:'free',ratioWidth:1,ratioHeight:(first.pageHeight||first.height)/(first.pageWidth||first.width)})};
+    settingsDraft={...pageSettings,...(item.pdfRatio||(item.pdfFit==='cover'?pageSettings:{mode:'free',ratioWidth:1,ratioHeight:(first.pageHeight||first.height)/(first.pageWidth||first.width)}))};
   }
   renderPageSettings();
 }
@@ -99,7 +99,7 @@ function renderEditor(){
   const item=selectedItem();const image=item?.kind==='image',toc=item?.kind==='toc',pdf=item?.kind==='pdf',blank=item?.kind==='blank';$('manuscript-form').hidden=image||toc||pdf||blank;$('blank-editor').hidden=!blank;$('image-editor').hidden=!image;$('toc-editor').hidden=!toc;$('pdf-editor').hidden=!pdf;if(toc)renderToc();
   $('input-heading').textContent=toc?'目次を作る':image?'画像を入れる':item?.layout==='reader'?'読者寄稿を入れる':item?.layout==='afterword'?'あとがきを入れる':'原稿を入れる';
   if(blank)$('input-heading').textContent='白紙ページ';
-  if(pdf){const extra=item.tocInclude===false;$('input-heading').textContent=extra?'作品外PDFを入れる':'PDF作品を入れる';$('pdf-kind').value=extra?'extra':'work';$('pdf-title').value=item.title;$('pdf-author').value=item.author||'';$('pdf-description').textContent=`${item.pdf.name}・全${item.pdf.pages.length}ページ`;$('pdf-toc-help').textContent=(extra?'このPDFは目次の自動取り込みから除外します。':'このPDFは1作品として、タイトルと作者名を目次に取り込みます。')+' すでに作った目次へ反映するには、目次の「並べた作品から取り込む」を押してください。';document.querySelector('label[for="pdf-title"]').textContent=extra?'一覧に表示する名前':'作品タイトル（一覧・目次用）';$('pdf-author').closest('.field').hidden=extra;}
+  if(pdf){const extra=item.tocInclude===false;$('input-heading').textContent=extra?'作品外PDFを入れる':'PDF作品を入れる';$('pdf-kind').value=extra?'extra':'work';$('pdf-fit').value=item.pdfFit||'contain';$('pdf-title').value=item.title;$('pdf-author').value=item.author||'';$('pdf-description').textContent=`${item.pdf.name}・全${item.pdf.pages.length}ページ`;$('pdf-toc-help').textContent=(extra?'このPDFは目次の自動取り込みから除外します。':'このPDFは1作品として、タイトルと作者名を目次に取り込みます。')+' すでに作った目次へ反映するには、目次の「並べた作品から取り込む」を押してください。';document.querySelector('label[for="pdf-title"]').textContent=extra?'一覧に表示する名前':'作品タイトル（一覧・目次用）';$('pdf-author').closest('.field').hidden=extra;}
   $('afterword-help').hidden=item?.layout!=='afterword';
   $('reader-fields').hidden=item?.layout!=='reader';$('preface').value=item?.preface||'';updatePrefaceCount();
   $('title').maxLength=1000;
@@ -110,7 +110,7 @@ function renderEditor(){
 }
 function selectItem(id){saveCurrent();selectedId=id;scheduleDraft();renderEditor();renderList();if(proof){const index=proof.pages.findIndex(p=>p.itemId===id);if(index>=0){currentPage=index;showPage();}}}
 function message(text,error=false){$('status').textContent=text;$('status').classList.toggle('error',error);}
-function setBusy(value){busy=value;$('undo-import').disabled=value;$('preview-button').disabled=value||!font;$('sample-button').disabled=value;$('export').disabled=value||!proof;$('export-web').disabled=value||!proof;$('font-file').disabled=value;$("font-choice").disabled=value;$("italic-font-choice").disabled=value;for(const control of document.querySelectorAll('.page-settings input,.page-settings select,.page-settings button'))control.disabled=value||(!value&&$('margin-fields').disabled&&control.id.startsWith('margin-'));for(const id of ['import-project','backup-project','save-draft','clear-project','undo-clear','add-blank','blank-preview','add-toc','toc-import','toc-add','toc-preview','add-text','add-reader','add-image','add-afterword','replace-image','image-preview','add-pdf','replace-pdf','pdf-preview','pdf-title','pdf-author','pdf-kind'])$(id).disabled=value;renderList();if(selectedItem()?.kind==='toc')renderToc();}
+function setBusy(value){busy=value;$('undo-import').disabled=value;$('preview-button').disabled=value||!font;$('sample-button').disabled=value;$('export').disabled=value||!proof;$('export-web').disabled=value||!proof;$('font-file').disabled=value;$("font-choice").disabled=value;$("italic-font-choice").disabled=value;for(const control of document.querySelectorAll('.page-settings input,.page-settings select,.page-settings button'))control.disabled=value||(!value&&$('margin-fields').disabled&&control.id.startsWith('margin-'));for(const id of ['import-project','backup-project','save-draft','clear-project','undo-clear','add-blank','blank-preview','add-toc','toc-import','toc-add','toc-preview','add-text','add-reader','add-image','add-afterword','replace-image','image-preview','add-pdf','replace-pdf','pdf-preview','pdf-title','pdf-author','pdf-kind','pdf-fit'])$(id).disabled=value;renderList();if(selectedItem()?.kind==='toc')renderToc();}
 function inputs(){return {preface:$('preface').value,title:$('title').value,author:$('author').value,body:$('body').value,indent:$('indent').checked,startSide:$('start-side').value,combineDigits:$('combine-digits').checked,autoPunctuationSpace:$('punctuation-space')?.checked===true};}
 function updatePrefaceCount(){$('preface-count').textContent=prefaceLength($('preface').value)+' / 150文字';}
 function invalidate(){clearLayoutCheck();saveCurrent();scheduleDraft();updatePrefaceCount();revision++;proof=null;pdfFile=null;$('export').disabled=true;$('export-web').disabled=true;$('download-area').hidden=true;$('web-download-area').hidden=true;webFile=null;$('proof-note').textContent='内容を変更しました。「並び順で確認」で更新してください。';$('page-info').textContent='変更は未反映';$('char-count').textContent=graphemes(plainText($('body').value).replace(/\s/g,'')).length.toLocaleString('ja')+'字';renderList();}
@@ -746,3 +746,6 @@ function renderLayoutCheck(doc){
  summary.textContent=count?`組版チェック：要確認 ${count}件`:'組版チェック：今回の検査で問題は見つかりませんでした';panel.open=count>0;
  const note=document.createElement('p');note.textContent='ページ端で切れる文字・ルビ・画像と、画像注釈の重なりを検査します。句読点のぶら下げや指定どおりのトリミングは警告しません。文字の形の外接枠で判定するため、重なりは誌面でも確認してください。'+(skipped?` 貼り付けPDF・画像 ${skipped}ページの内部は検査対象外です。`:'');panel.append(note,list);
 }
+
+
+$('pdf-fit').addEventListener('change',()=>{const item=selectedItem();if(busy||item?.kind!=='pdf')return;item.pdfFit=$('pdf-fit').value;invalidate();message('PDFの収め方を変更しました。「並び順で確認」で確認してください。');});

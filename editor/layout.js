@@ -487,9 +487,11 @@ export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=
       const original=sources.get(page.pdfSource).getPage(page.pdfIndex),box=original.getCropBox();
       const embedded=await pdf.embedPage(original,{left:box.x,bottom:box.y,right:box.x+box.width,top:box.y+box.height});
       const rotation=((original.getRotation().angle%360)+360)%360,turned=rotation===90||rotation===270;
-      const w=turned?box.height:box.width,h=turned?box.width:box.height,s=Math.min(SPEC.width/w,SPEC.height/h);
+      const w=turned?box.height:box.width,h=turned?box.width:box.height,s=(page.pdfFit==='cover'?Math.max:Math.min)(SPEC.width/w,SPEC.height/h);
       const x=(SPEC.width-w*s)/2,y=(SPEC.height-h*s)/2;
+      out.pushOperators(PDFLib.pushGraphicsState(),PDFLib.rectangle(0,0,SPEC.width,SPEC.height),PDFLib.clip(),PDFLib.endPath());
       out.drawPage(embedded,{x:x+(rotation===180||rotation===270?w*s:0),y:y+(rotation===90||rotation===180?h*s:0),width:box.width*s,height:box.height*s,rotate:degrees(-rotation)});
+      out.pushOperators(PDFLib.popGraphicsState());
     }else if(page.kind==='image'){
       const img=await pdf.embedJpg(page.image.data),r=page.placement;
       if(page.clip){const c=page.clip;out.pushOperators(PDFLib.pushGraphicsState(),PDFLib.rectangle(c.x,SPEC.height-c.y-c.height,c.width,c.height),PDFLib.clip(),PDFLib.endPath());}
@@ -531,6 +533,7 @@ export async function createPdf(doc,fontBytes,font,fontkit,PDFLib,onProgress=()=
 export function paginateAfterword(options){return fitTemplate(paginateAfterwordLegacy(options),options.pageSettings,options.startSide);}
 export function paginateReader(options){return fitTemplate(paginateReaderTemplate(options),options.pageSettings,options.startSide);}
 export function paginateToc(options){return fitTemplate(paginateTocLegacy(options),options.pageSettings,options.startSide);}
+
 
 
 
